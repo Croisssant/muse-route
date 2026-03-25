@@ -741,6 +741,30 @@ class RouteValidator:
             font = ImageFont.load_default()
             font_small = ImageFont.load_default()
         
+        # Draw visit zones (proximity threshold circles) around all exhibits FIRST
+        print(f"  Drawing visit zones (radius + {self.proximity_threshold}px) around exhibits...")
+        for exhibit in self.exhibits:
+            if exhibit['shape'] == 'circle':
+                exhibit_id = exhibit.get('exhibit_number', exhibit['id'])
+                center = (int(exhibit['coordinates']['center_x']), 
+                         int(exhibit['coordinates']['center_y']))
+                radius = exhibit['coordinates']['radius']
+                visit_zone_radius = int(radius + self.proximity_threshold)
+                
+                # Determine if this exhibit was visited
+                was_visited = validation_result['exhibit_visits'][exhibit_id]['visited']
+                
+                if was_visited:
+                    # Draw yellow/green visit zone for visited exhibits
+                    draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
+                                center[0]+visit_zone_radius, center[1]+visit_zone_radius],
+                               outline=(200, 200, 0), width=2)  # Yellow outline
+                else:
+                    # Draw gray visit zone for unvisited exhibits
+                    draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
+                                center[0]+visit_zone_radius, center[1]+visit_zone_radius],
+                               outline=(150, 150, 150), width=1)  # Gray outline
+        
         # Mark violations
         violations = validation_result['violations']
         
@@ -788,12 +812,12 @@ class RouteValidator:
                  fill=(0, 0, 0), font=font_small)
         
         # Legend symbols
-        draw.ellipse([legend_x, legend_y+65, legend_x+10, legend_y+75], fill=(255, 0, 0))
-        draw.text((legend_x+15, legend_y+65), "= Out of Bounds", fill=(0, 0, 0), font=font_small)
-        draw.ellipse([legend_x, legend_y+85, legend_x+10, legend_y+95], fill=(255, 0, 255))
-        draw.text((legend_x+15, legend_y+85), "= Exhibit Collision", fill=(0, 0, 0), font=font_small)
-        draw.ellipse([legend_x, legend_y+105, legend_x+10, legend_y+115], outline=(255, 255, 0), width=2)
-        draw.text((legend_x+15, legend_y+105), "= Visited Exhibit", fill=(0, 0, 0), font=font_small)
+        draw.ellipse([legend_x, legend_y+65, legend_x+10, legend_y+75], outline=(200, 200, 0), width=2)
+        draw.text((legend_x+15, legend_y+65), "= Visit zone (visited)", fill=(0, 0, 0), font=font_small)
+        draw.ellipse([legend_x, legend_y+85, legend_x+10, legend_y+95], outline=(150, 150, 150), width=1)
+        draw.text((legend_x+15, legend_y+85), "= Visit zone (not visited)", fill=(0, 0, 0), font=font_small)
+        draw.ellipse([legend_x, legend_y+105, legend_x+10, legend_y+115], fill=(255, 0, 0))
+        draw.text((legend_x+15, legend_y+105), "= Out of Bounds", fill=(0, 0, 0), font=font_small)
         
         # Save
         img.save(output_path)
