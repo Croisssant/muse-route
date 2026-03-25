@@ -1,0 +1,234 @@
+"""
+Convert VIA project JSON to museum layout annotation format
+Filters out unlabeled annotations and converts to format compatible with validate_route.py
+Supports: walls, rooms, exhibits, entrances, exits, and floor_areas
+"""
+
+import json
+from datetime import datetime
+
+def convert_via_to_museum_layout(via_json_path, output_path):
+    """
+    Convert VIA project JSON to museum layout format.
+    
+    Args:
+        via_json_path: Path to VIA project JSON file
+        output_path: Path to save converted museum layout JSON
+    """
+    # Load VIA project
+    with open(via_json_path, 'r') as f:
+        via_data = json.load(f)
+    
+    # Extract metadata section
+    metadata_entries = via_data.get('metadata', {})
+    attributes = via_data.get('attribute', {})
+    
+    # Initialize output structure
+    walls = []
+    rooms = []
+    exhibits = []
+    entrances = []
+    exits = []
+    floor_areas = []
+    other = []
+    
+    # Track statistics
+    total_annotations = len(metadata_entries)
+    unlabeled_count = 0
+    labeled_count = 0
+    
+    print(f"Processing {total_annotations} annotations...")
+    print("=" * 60)
+    
+    # Process each annotation
+    for annotation_id, annotation in metadata_entries.items():
+        av = annotation.get('av', {})
+        
+        # Skip unlabeled annotations (empty av dict)
+        if not av:
+            unlabeled_count += 1
+            xy = annotation.get('xy', [])
+            shape_type = xy[0] if xy else None
+            if shape_type == 3:  # Circle
+                center_x, center_y, radius = xy[1], xy[2], xy[3]
+                print(f"❌ Skipping unlabeled circle at ({center_x}, {center_y})")
+            elif shape_type == 2:  # Rectangle
+                x, y, width, height = xy[1], xy[2], xy[3], xy[4]
+                print(f"❌ Skipping unlabeled rectangle at ({x}, {y})")
+            else:
+                print(f"❌ Skipping unlabeled annotation: {annotation_id}")
+            continue
+        
+        labeled_count += 1
+        xy = annotation.get('xy', [])
+        shape_type = xy[0] if xy else None
+        
+        # Get entity type from attribute 1 (now called "Entity" instead of "Wall")
+        entity_type = av.get('1', '')
+        
+        # Process based on shape type
+        if shape_type == 6:  # Polyline
+            # Extract points
+            points = []
+            for i in range(1, len(xy), 2):
+                if i + 1 < len(xy):
+                    points.append({
+                        'x': xy[i],
+                        'y': xy[i + 1]
+                    })
+            
+            polyline_data = {
+                'id': annotation_id,
+                'annotation_number': len(walls) + len(rooms) + 1,
+                'shape': 'polyline',
+                'coordinates': {
+                    'points': points,
+                    'num_points': len(points)
+                },
+                'area': None
+            }
+            
+            if entity_type == '0':  # Wall
+                walls.append(polyline_data)
+                print(f"✓ Wall: {len(points)} points")
+            elif entity_type == '1':  # Room
+                rooms.append(polyline_data)
+                print(f"✓ Room: {len(points)} points")
+            else:
+                other.append(polyline_data)
+                print(f"✓ Other polyline: {len(points)} points")
+        
+        elif shape_type == 3:  # Circle (Exhibits)
+            # Extract circle data
+            center_x = xy[1]
+            center_y = xy[2]
+            radius = xy[3]
+            
+            # Get exhibit number from attribute 2
+            exhibit_number = av.get('2', '')
+            
+            circle_data = {
+                'id': annotation_id,
+                'annotation_number': len(exhibits) + 1,
+                'shape': 'circle',
+                'coordinates': {
+                    'center_x': center_x,
+                    'center_y': center_y,
+                    'radius': round(radius, 2)
+                },
+                'area': int(3.14159 * radius * radius),
+                'exhibit_number': exhibit_number,
+                'artifact_info': {
+                    'name': None,
+                    'description': None,
+                    'period': None,
+                    'collection': None,
+                    'notes': None
+                }
+            }
+            
+            exhibits.append(circle_data)
+        
+        elif shape_type == 2:  # Rectangle (Entrances, Exits, Floor Areas)
+            # Extract rectangle data
+            x = xy[1]
+            y = xy[2]
+            width = xy[3]
+            height = xy[4]
+            
+            rectangle_data = {
+                'id': annotation_id,
+                'annotation_number': None,  # Will be set based on type
+                'shape': 'rectangle',
+                'coordinates': {
+                    'x': round(x, 2),
+                    'y': round(y, 2),
+                    'width': round(width, 2),
+                    'height': round(height, 2)
+                },
+                'area': int(width * height)
+            }
+            
+            if entity_type == '3':  # Entrance
+                rectangle_data['annotation_number'] = len(entrances) + 1
+                entrances.append(rectangle_data)
+                print(f"✓ Entrance: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
+            elif entity_type == '4':  # Exit
+                rectangle_data['annotation_number'] = len(exits) + 1
+                exits.append(rectangle_data)
+                print(f"✓ Exit: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
+            elif entity_type == '5':  # Floor Area
+                rectangle_data['annotation_number'] = len(floor_areas) + 1
+                floor_areas.append(rectangle_data)
+                print(f"✓ Floor Area: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
+            else:
+                other.append(rectangle_data)
+                print(f"✓ Other rectangle: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
+    
+    # Sort exhibits by exhibit number
+    exhibits.sort(key=lambda x: int(x['exhibit_number']) if x['exhibit_number'].isdigit() else 999)
+    
+    # Create output structure
+    output = {
+        'metadata': {
+            'total_annotations': labeled_count,
+            'export_date': datetime.now().isoformat(),
+            'attributes': attributes,
+            'counts': {
+                'walls': len(walls),
+                'rooms': len(rooms),
+                'exhibits': len(exhibits),
+                'entrances': len(entrances),
+                'exits': len(exits),
+                'floor_areas': len(floor_areas),
+                'other': len(other)
+            }
+        },
+        'walls': walls,
+        'rooms': rooms,
+        'exhibits': exhibits,
+        'entrances': entrances,
+        'exits': exits,
+        'floor_areas': floor_areas,
+        'other': other
+    }
+    
+    # Save to file
+    with open(output_path, 'w') as f:
+        json.dump(output, f, indent=2)
+    
+    # Print summary
+    print("\n" + "=" * 60)
+    print("CONVERSION SUMMARY")
+    print("=" * 60)
+    print(f"Total annotations in VIA project: {total_annotations}")
+    print(f"  ✓ Labeled (kept):     {labeled_count}")
+    print(f"  ❌ Unlabeled (removed): {unlabeled_count}")
+    print()
+    print("Converted annotations:")
+    print(f"  Walls:       {len(walls)}")
+    print(f"  Rooms:       {len(rooms)}")
+    print(f"  Exhibits:    {len(exhibits)}")
+    print(f"  Entrances:   {len(entrances)}")
+    print(f"  Exits:       {len(exits)}")
+    print(f"  Floor Areas: {len(floor_areas)}")
+    print(f"  Other:       {len(other)}")
+    print()
+    print(f"✅ Saved to: {output_path}")
+    print("\nThis file is compatible with validate_route.py --annotations")
+    
+    return output
+
+if __name__ == '__main__':
+    import sys
+    
+    if len(sys.argv) < 2:
+        print("Usage: python convert_via_to_museum_layout.py <via_project.json> [output.json]")
+        print("\nExample:")
+        print("  python convert_via_to_museum_layout.py via_project_24Mar2026_16h58m58s.json museum_layout_complete.json")
+        sys.exit(1)
+    
+    via_json_path = sys.argv[1]
+    output_path = sys.argv[2] if len(sys.argv) > 2 else 'museum_layout_complete.json'
+    
+    convert_via_to_museum_layout(via_json_path, output_path)
