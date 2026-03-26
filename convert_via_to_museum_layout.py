@@ -25,7 +25,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
     
     # Initialize output structure
     walls = []
-    rooms = []
+    galleries = []
     exhibits = []
     entrances = []
     exits = []
@@ -63,8 +63,11 @@ def convert_via_to_museum_layout(via_json_path, output_path):
         xy = annotation.get('xy', [])
         shape_type = xy[0] if xy else None
         
-        # Get entity type from attribute 1 (now called "Entity" instead of "Wall")
+        # Get entity type from attribute 1
         entity_type = av.get('1', '')
+        
+        # Get gallery name from attribute 3 (if it's a gallery)
+        gallery_name = av.get('3', '')
         
         # Process based on shape type
         if shape_type == 6:  # Polyline
@@ -79,7 +82,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
             
             polyline_data = {
                 'id': annotation_id,
-                'annotation_number': len(walls) + len(rooms) + 1,
+                'annotation_number': len(walls) + len(galleries) + 1,
                 'shape': 'polyline',
                 'coordinates': {
                     'points': points,
@@ -91,9 +94,11 @@ def convert_via_to_museum_layout(via_json_path, output_path):
             if entity_type == '0':  # Wall
                 walls.append(polyline_data)
                 print(f"✓ Wall: {len(points)} points")
-            elif entity_type == '1':  # Room
-                rooms.append(polyline_data)
-                print(f"✓ Room: {len(points)} points")
+            elif entity_type == '1':  # Gallery
+                polyline_data['gallery_name'] = gallery_name if gallery_name else None
+                galleries.append(polyline_data)
+                gallery_label = f" ({gallery_name})" if gallery_name else ""
+                print(f"✓ Gallery: {len(points)} points{gallery_label}")
             else:
                 other.append(polyline_data)
                 print(f"✓ Other polyline: {len(points)} points")
@@ -149,7 +154,13 @@ def convert_via_to_museum_layout(via_json_path, output_path):
                 'area': int(width * height)
             }
             
-            if entity_type == '3':  # Entrance
+            if entity_type == '1':  # Gallery (rectangle)
+                rectangle_data['annotation_number'] = len(galleries) + 1
+                rectangle_data['gallery_name'] = gallery_name if gallery_name else None
+                galleries.append(rectangle_data)
+                gallery_label = f" '{gallery_name}'" if gallery_name else ""
+                print(f"✓ Gallery: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f}){gallery_label}")
+            elif entity_type == '3':  # Entrance
                 rectangle_data['annotation_number'] = len(entrances) + 1
                 entrances.append(rectangle_data)
                 print(f"✓ Entrance: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
@@ -176,7 +187,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
             'attributes': attributes,
             'counts': {
                 'walls': len(walls),
-                'rooms': len(rooms),
+                'galleries': len(galleries),
                 'exhibits': len(exhibits),
                 'entrances': len(entrances),
                 'exits': len(exits),
@@ -185,7 +196,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
             }
         },
         'walls': walls,
-        'rooms': rooms,
+        'galleries': galleries,
         'exhibits': exhibits,
         'entrances': entrances,
         'exits': exits,
@@ -207,7 +218,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
     print()
     print("Converted annotations:")
     print(f"  Walls:       {len(walls)}")
-    print(f"  Rooms:       {len(rooms)}")
+    print(f"  Galleries:   {len(galleries)}")
     print(f"  Exhibits:    {len(exhibits)}")
     print(f"  Entrances:   {len(entrances)}")
     print(f"  Exits:       {len(exits)}")
