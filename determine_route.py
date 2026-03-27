@@ -38,38 +38,16 @@ class RouteDeterminer:
 
         self.entrances = self.annotations.get('entrances', [])
         self.exits     = self.annotations.get('exits', [])
-        self.walls     = self.annotations.get('walls', [])
         self.exhibits  = self.annotations.get('exhibits', [])
-
-        self.museum_bounds = self._calculate_museum_bounds()
 
         print(f"Loaded annotations:")
         print(f"  Entrances : {len(self.entrances)}")
         print(f"  Exits     : {len(self.exits)}")
         print(f"  Exhibits  : {len(self.exhibits)}")
-        if self.museum_bounds:
-            print(f"  Museum bounds: X=[{self.museum_bounds['min_x']:.0f}, "
-                  f"{self.museum_bounds['max_x']:.0f}], "
-                  f"Y=[{self.museum_bounds['min_y']:.0f}, "
-                  f"{self.museum_bounds['max_y']:.0f}]")
 
     # ──────────────────────────────────────────────────────────────────
     # Annotation helpers
     # ──────────────────────────────────────────────────────────────────
-
-    def _calculate_museum_bounds(self):
-        if not self.walls:
-            return None
-        all_x, all_y = [], []
-        for wall in self.walls:
-            if wall['shape'] == 'polyline':
-                for pt in wall['coordinates']['points']:
-                    all_x.append(pt['x'])
-                    all_y.append(pt['y'])
-        if not all_x:
-            return None
-        return dict(min_x=min(all_x), max_x=max(all_x),
-                    min_y=min(all_y), max_y=max(all_y))
 
     def _distance(self, p1, p2):
         return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
@@ -442,7 +420,7 @@ class RouteDeterminer:
         print("="*70)
 
         # ── Load ──────────────────────────────────────────────────────
-        print("\n[1/7] Loading images…")
+        print("\n[1/5] Loading images…")
         route_img    = cv2.cvtColor(
             np.array(PILImage.open(str(route_image_path)).convert('RGB')),
             cv2.COLOR_RGB2BGR)
@@ -454,7 +432,7 @@ class RouteDeterminer:
         print(f"    Original image: {original_img.shape[:2]} (H x W)")
 
         # ── Align ─────────────────────────────────────────────────────
-        print("\n[2/7] Aligning route image to original coordinate space…")
+        print("\n[2/5] Aligning route image to original coordinate space…")
         same_size = (route_img.shape[:2] == original_img.shape[:2])
         if same_size:
             print("    Images are the same size — skipping alignment.")
@@ -466,40 +444,36 @@ class RouteDeterminer:
             print(f"    Alignment method used: {alignment_method}")
 
         # ── Difference ────────────────────────────────────────────────
-        print("\n[3/7] Computing image difference…")
+        print("\n[3/5] Computing image difference…")
         difference = cv2.absdiff(aligned_route, original_img)
         gray_diff  = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
 
         # ── Threshold ─────────────────────────────────────────────────
-        print(f"\n[4/7] Applying threshold (threshold={difference_threshold})…")
+        # Required: converts the greyscale difference into a binary route mask.
+        # All downstream steps (morphology, skeletonization, endpoint search)
+        # operate on this binary mask.
+        print(f"\n[4/5] Applying threshold (threshold={difference_threshold})…")
         _, mask_threshold = cv2.threshold(
             gray_diff, difference_threshold, 255, cv2.THRESH_BINARY)
         print(f"    Detected {cv2.countNonZero(mask_threshold)} changed pixels")
 
-        # ── ROI ───────────────────────────────────────────────────────
-        mask_roi = mask_threshold.copy()
-        if self.museum_bounds:
-            print(f"\n[5/7] Applying museum ROI mask…")
-            roi_mask = np.zeros(mask_threshold.shape, dtype=np.uint8)
-            x_min = max(0, int(self.museum_bounds['min_x'] - 200))
-            x_max = min(mask_threshold.shape[1], int(self.museum_bounds['max_x']))
-            y_min = max(0, int(self.museum_bounds['min_y'] - 200))
-            y_max = min(mask_threshold.shape[0], int(self.museum_bounds['max_y'] + 200))
-            roi_mask[y_min:y_max, x_min:x_max] = 255
-            mask_roi = cv2.bitwise_and(mask_threshold, roi_mask)
-            print(f"    After ROI: {cv2.countNonZero(mask_roi)} pixels")
-        else:
-            print("\n[5/7] Skipping ROI mask (no museum bounds)")
+        # ROI step removed: noise outside the entrance/exit bounding boxes is
+        # already irrelevant because _find_route_endpoints_by_boxes only
+        # inspects skeleton pixels that fall inside those boxes.
 
         # ── Morphology ────────────────────────────────────────────────
-        print("\n[6/7] Applying morphological operations…")
+        # Required: CLOSE fills small gaps in the drawn route line so the
+        # skeleton stays connected through the entrance/exit boxes; OPEN
+        # removes isolated noise specks that would otherwise produce spurious
+        # skeleton branches and slow down skeletonization.
+        print("\n[5/5] Applying morphological operations…")
         kernel      = np.ones((2, 2), np.uint8)
-        mask_closed = cv2.morphologyEx(mask_roi,    cv2.MORPH_CLOSE, kernel, iterations=1)
-        mask_opened = cv2.morphologyEx(mask_closed, cv2.MORPH_OPEN,  kernel, iterations=1)
+        mask_closed = cv2.morphologyEx(mask_threshold, cv2.MORPH_CLOSE, kernel, iterations=1)
+        mask_opened = cv2.morphologyEx(mask_closed,    cv2.MORPH_OPEN,  kernel, iterations=1)
         print(f"    After morphology: {cv2.countNonZero(mask_opened)} pixels")
 
         # ── Skeletonize ───────────────────────────────────────────────
-        print("\n[7/7] Skeletonizing route…")
+        print("\nSkeletonizing route…")
         skeleton = self._skeletonize(mask_opened)
         print(f"    Skeleton: {cv2.countNonZero(skeleton)} pixels")
 
