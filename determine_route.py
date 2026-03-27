@@ -121,9 +121,13 @@ class RouteDeterminer:
             raise ValueError(f"Unsupported color: {color}")
 
         kernel = np.ones((5, 5), np.uint8)
+    
+        # MORPH_CLOSE: Dilate -> Erosion (Fills small holes inside the object)
+        # MORPH_OPEN: Erosion -> Dilate (Removes small noises blobs)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
 
+        # Find outer contours
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return None
@@ -136,8 +140,8 @@ class RouteDeterminer:
 
     def _box_anchors(self, route_img_bgr):
         """
-        Return (src_pts, dst_pts) from entrance+exit box detection, or (None, None).
-        src_pts are corners in the route image; dst_pts are annotation-space corners.
+        Return (detected_corners, annotated_corners) from entrance+exit box detection, or (None, None).
+        detected_corners are corners in the route image; annotated_corners are annotation-space corners.
         """
         if not (self.entrances and self.exits):
             return None, None
@@ -146,20 +150,20 @@ class RouteDeterminer:
         if entrance_ann['shape'] != 'rectangle' or exit_ann['shape'] != 'rectangle':
             return None, None
 
-        src_e = self._detect_colored_box(route_img_bgr, 'green')
-        src_x = self._detect_colored_box(route_img_bgr, 'yellow')
-        dst_e = self._rect_corners(entrance_ann['coordinates'])
-        dst_x = self._rect_corners(exit_ann['coordinates'])
+        detected_entrance_corners = self._detect_colored_box(route_img_bgr, 'green')
+        detected_exit_corners = self._detect_colored_box(route_img_bgr, 'yellow')
+        annotated_entrance_corners = self._rect_corners(entrance_ann['coordinates'])
+        annotated_exit_corners = self._rect_corners(exit_ann['coordinates'])
 
-        parts_s, parts_d = [], []
-        if src_e is not None:
-            parts_s.append(src_e);  parts_d.append(dst_e)
-        if src_x is not None:
-            parts_s.append(src_x);  parts_d.append(dst_x)
-        if not parts_s:
+        detected_corners, annotated_corners = [], []
+        if detected_entrance_corners is not None:
+            detected_corners.append(detected_entrance_corners);  annotated_corners.append(annotated_entrance_corners)
+        if detected_exit_corners is not None:
+            detected_corners.append(detected_exit_corners);  annotated_corners.append(annotated_exit_corners)
+        if not detected_corners:
             return None, None
 
-        return np.vstack(parts_s), np.vstack(parts_d)
+        return np.vstack(detected_corners), np.vstack(annotated_corners)
 
     # ──────────────────────────────────────────────────────────────────
     # Circle matching — two-pass with coarse-homography seeding
@@ -189,14 +193,19 @@ class RouteDeterminer:
         if H_coarse is not None:
             det_xy  = np.array([[dx, dy] for dx, dy, _ in detected], dtype=np.float32)
             # perspectiveTransform needs shape (N,1,2)
-            proj    = cv2.perspectiveTransform(det_xy.reshape(-1, 1, 2), H_coarse)
-            proj    = proj.reshape(-1, 2)
+            # projects the detected points into annotation space using H_coarse
+            proj = cv2.perspectiveTransform(det_xy.reshape(-1, 1, 2), H_coarse)
+            proj = proj.reshape(-1, 2)
 
             tight_r = CIRCLE_MATCH_RADIUS * 0.6   # tighter because projection is accurate
-
+            
+            # For each projected point:
+            # 1: Compute Euclidean distance to all annotation points
+            # 2: Find the closest one
+            # 3: If it’s within the tight radius and not already used -> assign as match
             for i, (px, py) in enumerate(proj):
                 dists = np.linalg.norm(ann_xy - np.array([px, py]), axis=1)
-                j     = int(np.argmin(dists))
+                j = int(np.argmin(dists))
                 if dists[j] < tight_r and j not in used_ann:
                     src_pts.append(list(detected[i][:2]))
                     dst_pts.append(ann_xy[j].tolist())
@@ -207,6 +216,7 @@ class RouteDeterminer:
         # otherwise fall back to a 1:1 assumption (same-size images).
         if src_pts:
             # Derive sx, sy from the matched pairs so far
+            # sx, sy are rough scale factors between source and destination
             s  = np.array(src_pts, dtype=np.float32)
             d  = np.array(dst_pts, dtype=np.float32)
             sx = float(np.median(d[:, 0] / np.maximum(s[:, 0], 1)))
@@ -219,9 +229,11 @@ class RouteDeterminer:
         for dx, dy, dr in detected:
             if (dx, dy) in already_src:
                 continue
-            scaled = ann_xy * np.array([sx, sy])   # rough annotation-space position
-            dists  = np.linalg.norm(scaled - np.array([dx * sx, dy * sy]), axis=1)
+            # scaled = ann_xy * np.array([sx, sy])   # rough annotation-space position
+            # dists  = np.linalg.norm(scaled - np.array([dx * sx, dy * sy]), axis=1)
             # recompute without scaling confusion — use direct distance in route space
+            # computing a distance between the detected point and scaled annotation points, but in route image space, not annotation space.
+            # ann_xy / np.array(sx, sy): approximates where that annotation point would be in route image coordinates
             dists2 = np.linalg.norm(
                 ann_xy / np.array([sx if sx > 0 else 1, sy if sy > 0 else 1])
                 - np.array([dx, dy]), axis=1)
@@ -255,6 +267,10 @@ class RouteDeterminer:
            Fall back through: circles-only → boxes-only → plain resize.
 
         Returns (aligned_bgr, method_name).
+
+        ** Note: 
+            src = corners detected from route image
+            dst = corners from annotation (original image)
         """
         orig_h, orig_w = original_img_bgr.shape[:2]
         ann_circles    = self._annotation_circles()
@@ -263,6 +279,19 @@ class RouteDeterminer:
         src_box, dst_box = self._box_anchors(route_img_bgr)
         H_coarse = None
         if src_box is not None and len(src_box) >= 4:
+            """
+            https://docs.opencv.org/4.x/d9/dab/tutorial_homography.html
+            https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#ga4abc2ece9fab9398f2e560d53c8c9780
+
+            RANSAC: Try many different random subsets of the corresponding point pairs (of four pairs each, collinear pairs are discarded), 
+            estimate the homography matrix using this subset and a simple least-squares algorithm, and then compute the quality/goodness 
+            of the computed homography (which is the number of inliers for RANSAC or the least median re-projection error for LMeDS). 
+            The best subset is then used to produce the initial estimate of the homography matrix and the mask of inliers/outliers.
+            
+            5.0: Reprojection Threshold. After transforming a source point, 
+            if it lands within 5 pixels of its expected destination point, consider it correct.
+            """
+         
             H_coarse, _ = cv2.findHomography(src_box, dst_box, cv2.RANSAC, 5.0)
             if H_coarse is not None:
                 print(f"  [Alignment] Coarse box homography computed "
@@ -449,7 +478,7 @@ class RouteDeterminer:
         gray_diff  = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
 
         # ── Threshold ─────────────────────────────────────────────────
-        # Required: converts the greyscale difference into a binary route mask.
+        # Converts the greyscale difference into a binary route mask.
         # All downstream steps (morphology, skeletonization, endpoint search)
         # operate on this binary mask.
         print(f"\n[4/5] Applying threshold (threshold={difference_threshold})…")
@@ -457,14 +486,10 @@ class RouteDeterminer:
             gray_diff, difference_threshold, 255, cv2.THRESH_BINARY)
         print(f"    Detected {cv2.countNonZero(mask_threshold)} changed pixels")
 
-        # ROI step removed: noise outside the entrance/exit bounding boxes is
-        # already irrelevant because _find_route_endpoints_by_boxes only
-        # inspects skeleton pixels that fall inside those boxes.
-
         # ── Morphology ────────────────────────────────────────────────
-        # Required: CLOSE fills small gaps in the drawn route line so the
-        # skeleton stays connected through the entrance/exit boxes; OPEN
-        # removes isolated noise specks that would otherwise produce spurious
+        # CLOSE fills small gaps in the drawn route line so the
+        # skeleton stays connected through the entrance/exit boxes.
+        # OPEN removes isolated noise specks that would otherwise produce spurious
         # skeleton branches and slow down skeletonization.
         print("\n[5/5] Applying morphological operations…")
         kernel      = np.ones((2, 2), np.uint8)

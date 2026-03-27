@@ -874,3 +874,54 @@ Examples:
 
 if __name__ == '__main__':
     main()
+
+
+
+def segments_intersect(self, p1, p2, p3, p4):
+    """
+    Check if segment p1→p2 intersects segment p3→p4.
+    Uses cross-product orientation test.
+    """
+    def cross(o, a, b):
+        return (a[0]-o[0]) * (b[1]-o[1]) - (a[1]-o[1]) * (b[0]-o[0])
+
+    d1 = cross(p3, p4, p1)
+    d2 = cross(p3, p4, p2)
+    d3 = cross(p1, p2, p3)
+    d4 = cross(p1, p2, p4)
+
+    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+       ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+        return True
+
+    # Collinear cases
+    if d1 == 0 and self._point_on_segment(p1, p3, p4): return True
+    if d2 == 0 and self._point_on_segment(p2, p3, p4): return True
+    if d3 == 0 and self._point_on_segment(p3, p1, p2): return True
+    if d4 == 0 and self._point_on_segment(p4, p1, p2): return True
+
+    return False
+
+def route_crosses_walls(self, skeleton_points):
+    """
+    Returns a list of (skeleton_pt, wall_id) pairs where the route
+    crosses a wall segment.
+    """
+    violations = []
+    # Build wall segments from all polylines
+    wall_segments = []
+    for wall in self.walls:
+        if wall['shape'] == 'polyline':
+            pts = [(p['x'], p['y']) for p in wall['coordinates']['points']]
+            for i in range(len(pts) - 1):
+                wall_segments.append((wall['id'], pts[i], pts[i+1]))
+
+    # Check each consecutive pair of skeleton points against every wall segment
+    for i in range(len(skeleton_points) - 1):
+        s1, s2 = skeleton_points[i], skeleton_points[i+1]
+        for wall_id, w1, w2 in wall_segments:
+            if self.segments_intersect(s1, s2, w1, w2):
+                violations.append((s1, wall_id))
+                break  # one violation per skeleton segment is enough
+
+    return violations
