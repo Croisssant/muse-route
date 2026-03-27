@@ -321,43 +321,6 @@ class RouteValidator:
         
         return filtered_points
     
-    def _sample_route_points(self, mask, sample_rate=5):
-        """
-        Sample points from the route mask at regular intervals.
-        This works better for thick routes than skeletonization.
-        
-        Args:
-            mask: Binary mask of the route
-            sample_rate: Sample every Nth pixel
-        
-        Returns:
-            List of (x, y) tuples
-        """
-        # Find all route pixels
-        points = np.column_stack(np.where(mask > 0))
-        
-        if len(points) == 0:
-            return []
-        
-        # Convert to (x, y) format
-        points = [(p[1], p[0]) for p in points]
-        
-        # Sort by x, then y to get a rough ordering
-        points.sort()
-        
-        # Sample every Nth point
-        sampled = points[::sample_rate]
-        
-        return sampled
-    
-    def _thin_route(self, mask):
-        """
-        Thin the route to centerline.
-        Uses skeletonization with less aggressive erosion.
-        """
-        # Use the standard skeletonization but with less aggressive erosion
-        return self._skeletonize(mask)
-    
     def _skeletonize(self, mask):
         """Apply skeletonization to get route centerline."""
         skeleton = np.zeros(mask.shape, np.uint8)
