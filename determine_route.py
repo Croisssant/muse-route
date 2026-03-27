@@ -129,62 +129,16 @@ class RouteDeterminer:
         return [(x, y, r) for x, y, r in detected[0]]
 
     # ──────────────────────────────────────────────────────────────────
-    # Match detected circles → annotation circles
-    # ──────────────────────────────────────────────────────────────────
-
-    def _match_circles(self, detected, ann_circles, route_shape, ann_shape):
-        """
-        Match detected circles in the route image to annotated circles.
-
-        Because the route image may be a different scale we first estimate a
-        rough scale factor from image dimensions, apply it to the annotation
-        coordinates, then do nearest-neighbour matching.
-
-        Returns (src_pts, dst_pts) as float32 arrays of matched centres.
-        """
-        if not detected or not ann_circles:
-            return None, None
-
-        rh, rw = route_shape[:2]
-        ah, aw = ann_shape[:2]
-
-        sx = rw / aw if aw > 0 else 1.0
-        sy = rh / ah if ah > 0 else 1.0
-
-        src_pts, dst_pts = [], []
-
-        for dx, dy, dr in detected:
-            best_dist = float('inf')
-            best_ann  = None
-            for ax, ay, ar in ann_circles:
-                scaled_ax = ax * sx
-                scaled_ay = ay * sy
-                dist = math.sqrt((dx - scaled_ax)**2 + (dy - scaled_ay)**2)
-                threshold = max(CIRCLE_MATCH_RADIUS, dr * 1.0)
-                if dist < best_dist and dist < threshold:
-                    best_dist = dist
-                    best_ann  = (ax, ay)
-
-            if best_ann is not None:
-                src_pts.append([dx, dy])
-                dst_pts.append(list(best_ann))
-
-        if not src_pts:
-            return None, None
-
-        return (np.array(src_pts, dtype=np.float32),
-                np.array(dst_pts, dtype=np.float32))
-
-    # ──────────────────────────────────────────────────────────────────
-    # Colored-box detection (entrance / exit fallback)
+    # Colored-box detection (entrance / exit)
     # ──────────────────────────────────────────────────────────────────
 
     def _detect_colored_box(self, img_bgr, color: str):
+        """Detect the bounding rectangle of a solid green or yellow box."""
         hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
         if color == 'green':
-            mask = cv2.inRange(hsv, np.array([35,60,60]), np.array([85,255,255]))
+            mask = cv2.inRange(hsv, np.array([35, 60, 60]), np.array([85, 255, 255]))
         elif color == 'yellow':
-            mask = cv2.inRange(hsv, np.array([20,80,80]), np.array([35,255,255]))
+            mask = cv2.inRange(hsv, np.array([20, 80, 80]), np.array([35, 255, 255]))
         else:
             raise ValueError(f"Unsupported color: {color}")
 
@@ -199,10 +153,114 @@ class RouteDeterminer:
         if cv2.contourArea(largest) < 100:
             return None
         bx, by, bw, bh = cv2.boundingRect(largest)
-        return np.array([[bx,bw+bx,bw+bx,bx],[by,by,bh+by,bh+by]], dtype=np.float32).T
+        return np.array([[bx, bw+bx, bw+bx, bx],
+                         [by, by,    bh+by, bh+by]], dtype=np.float32).T
+
+    def _box_anchors(self, route_img_bgr):
+        """
+        Return (src_pts, dst_pts) from entrance+exit box detection, or (None, None).
+        src_pts are corners in the route image; dst_pts are annotation-space corners.
+        """
+        if not (self.entrances and self.exits):
+            return None, None
+        entrance_ann = self.entrances[0]
+        exit_ann     = self.exits[0]
+        if entrance_ann['shape'] != 'rectangle' or exit_ann['shape'] != 'rectangle':
+            return None, None
+
+        src_e = self._detect_colored_box(route_img_bgr, 'green')
+        src_x = self._detect_colored_box(route_img_bgr, 'yellow')
+        dst_e = self._rect_corners(entrance_ann['coordinates'])
+        dst_x = self._rect_corners(exit_ann['coordinates'])
+
+        parts_s, parts_d = [], []
+        if src_e is not None:
+            parts_s.append(src_e);  parts_d.append(dst_e)
+        if src_x is not None:
+            parts_s.append(src_x);  parts_d.append(dst_x)
+        if not parts_s:
+            return None, None
+
+        return np.vstack(parts_s), np.vstack(parts_d)
 
     # ──────────────────────────────────────────────────────────────────
-    # Master alignment
+    # Circle matching — two-pass with coarse-homography seeding
+    # ──────────────────────────────────────────────────────────────────
+
+    def _match_circles(self, detected, ann_circles, H_coarse=None):
+        """
+        Match detected circles (route-image space) to annotation circles
+        (annotation space).
+
+        Pass 1  – if H_coarse is provided, project each detected centre through
+                  H_coarse to get a good initial estimate of its annotation-space
+                  position, then do nearest-neighbour within a tight radius.
+        Pass 2  – fall back to a loose linear-scale nearest-neighbour for any
+                  circles not matched in pass 1 (or when H_coarse is None).
+
+        Returns (src_pts, dst_pts) as float32 arrays, or (None, None).
+        """
+        if not detected or not ann_circles:
+            return None, None
+
+        ann_xy = np.array([[ax, ay] for ax, ay, _ in ann_circles], dtype=np.float32)
+        src_pts, dst_pts = [], []
+        used_ann = set()   # prevent duplicate annotation assignments
+
+        # ── Pass 1: H_coarse-guided tight matching ─────────────────────
+        if H_coarse is not None:
+            det_xy  = np.array([[dx, dy] for dx, dy, _ in detected], dtype=np.float32)
+            # perspectiveTransform needs shape (N,1,2)
+            proj    = cv2.perspectiveTransform(det_xy.reshape(-1, 1, 2), H_coarse)
+            proj    = proj.reshape(-1, 2)
+
+            tight_r = CIRCLE_MATCH_RADIUS * 0.6   # tighter because projection is accurate
+
+            for i, (px, py) in enumerate(proj):
+                dists = np.linalg.norm(ann_xy - np.array([px, py]), axis=1)
+                j     = int(np.argmin(dists))
+                if dists[j] < tight_r and j not in used_ann:
+                    src_pts.append(list(detected[i][:2]))
+                    dst_pts.append(ann_xy[j].tolist())
+                    used_ann.add(j)
+
+        # ── Pass 2: loose linear-scale matching for remaining circles ──
+        # Estimate rough scale from already-matched pairs if available,
+        # otherwise fall back to a 1:1 assumption (same-size images).
+        if src_pts:
+            # Derive sx, sy from the matched pairs so far
+            s  = np.array(src_pts, dtype=np.float32)
+            d  = np.array(dst_pts, dtype=np.float32)
+            sx = float(np.median(d[:, 0] / np.maximum(s[:, 0], 1)))
+            sy = float(np.median(d[:, 1] / np.maximum(s[:, 1], 1)))
+        else:
+            sx, sy = 1.0, 1.0
+
+        already_src = {tuple(p) for p in src_pts}
+
+        for dx, dy, dr in detected:
+            if (dx, dy) in already_src:
+                continue
+            scaled = ann_xy * np.array([sx, sy])   # rough annotation-space position
+            dists  = np.linalg.norm(scaled - np.array([dx * sx, dy * sy]), axis=1)
+            # recompute without scaling confusion — use direct distance in route space
+            dists2 = np.linalg.norm(
+                ann_xy / np.array([sx if sx > 0 else 1, sy if sy > 0 else 1])
+                - np.array([dx, dy]), axis=1)
+            j = int(np.argmin(dists2))
+            threshold = max(CIRCLE_MATCH_RADIUS, dr)
+            if dists2[j] < threshold and j not in used_ann:
+                src_pts.append([dx, dy])
+                dst_pts.append(ann_xy[j].tolist())
+                used_ann.add(j)
+
+        if not src_pts:
+            return None, None
+        return (np.array(src_pts, dtype=np.float32),
+                np.array(dst_pts, dtype=np.float32))
+
+    # ──────────────────────────────────────────────────────────────────
+    # Master alignment  — fused boxes + circles
     # ──────────────────────────────────────────────────────────────────
 
     def _align_route_image(self, route_img_bgr, original_img_bgr):
@@ -211,81 +269,79 @@ class RouteDeterminer:
 
         Strategy
         --------
-        1. Detect exhibit circles in the route image, match to annotation
-           circles, compute homography.  Requires MIN_CIRCLE_MATCHES matches.
-        2. Fall back to entrance (green) + exit (yellow) box corners.
-        3. Last resort: plain resize.
+        1. Detect entrance/exit boxes → coarse homography H_coarse.
+           This gives a reliable seed even when circle detection is noisy.
+        2. Use H_coarse to guide a two-pass circle match over all 100 exhibits.
+           Fuse box corners + matched circle centres into a single point set.
+        3. Compute final homography from the fused set (RANSAC).
+           Fall back through: circles-only → boxes-only → plain resize.
 
         Returns (aligned_bgr, method_name).
         """
         orig_h, orig_w = original_img_bgr.shape[:2]
-        ann_circles = self._annotation_circles()
+        ann_circles    = self._annotation_circles()
 
-        # ── Strategy 1: exhibit circles ───────────────────────────────
+        # ── Step 1: coarse homography from boxes ──────────────────────
+        src_box, dst_box = self._box_anchors(route_img_bgr)
+        H_coarse = None
+        if src_box is not None and len(src_box) >= 4:
+            H_coarse, _ = cv2.findHomography(src_box, dst_box, cv2.RANSAC, 5.0)
+            if H_coarse is not None:
+                print(f"  [Alignment] Coarse box homography computed "
+                      f"({len(src_box)} pts) — seeding circle search")
+            else:
+                print("  [Alignment] Coarse box homography failed; "
+                      "circle matching will use linear-scale seed")
+        else:
+            print("  [Alignment] Box detection incomplete; "
+                  "circle matching will use linear-scale seed")
+
+        # ── Step 2: detect & match exhibit circles ────────────────────
+        src_circ = dst_circ = None
         if ann_circles:
             print("  [Alignment] Detecting exhibit circles in route image…")
             detected = self._detect_circles_in_image(route_img_bgr, ann_circles)
-            print(f"             {len(detected)} circles detected in route image")
+            print(f"             {len(detected)} circles detected")
 
-            ann_shape = original_img_bgr.shape
-            src_pts, dst_pts = self._match_circles(
-                detected, ann_circles, route_img_bgr.shape, ann_shape)
+            src_circ, dst_circ = self._match_circles(
+                detected, ann_circles, H_coarse=H_coarse)
+            n_matched = len(src_circ) if src_circ is not None else 0
+            print(f"             {n_matched} circles matched")
 
-            if src_pts is not None and len(src_pts) >= MIN_CIRCLE_MATCHES:
-                print(f"             {len(src_pts)} circles matched → computing homography")
-                H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-                if H is not None:
-                    inliers = int(mask.sum()) if mask is not None else len(src_pts)
-                    print(f"  ✅ Circle-based homography ({inliers}/{len(src_pts)} inliers)")
-                    aligned = cv2.warpPerspective(
-                        route_img_bgr, H, (orig_w, orig_h),
-                        flags=cv2.INTER_LINEAR,
-                        borderMode=cv2.BORDER_CONSTANT,
-                        borderValue=(255, 255, 255))
-                    return aligned, 'circles'
-                else:
-                    print("  ⚠️  Homography from circles failed; trying box fallback…")
-            else:
-                n = len(src_pts) if src_pts is not None else 0
-                print(f"  ⚠️  Only {n} circle matches (need {MIN_CIRCLE_MATCHES}); "
-                      f"trying box fallback…")
+        # ── Step 3: fuse boxes + circles → final homography ───────────
+        # Always include box corners so the entrance/exit region is tightly
+        # anchored, regardless of how many circles are found nearby.
+        fuse_src, fuse_dst = [], []
 
-        # ── Strategy 2: entrance / exit colored boxes ─────────────────
-        if self.entrances and self.exits:
-            entrance_ann = self.entrances[0]
-            exit_ann     = self.exits[0]
-            if (entrance_ann['shape'] == 'rectangle' and
-                    exit_ann['shape'] == 'rectangle'):
+        if src_circ is not None and len(src_circ) >= MIN_CIRCLE_MATCHES:
+            fuse_src.append(src_circ)
+            fuse_dst.append(dst_circ)
 
-                src_entrance = self._detect_colored_box(route_img_bgr, 'green')
-                src_exit     = self._detect_colored_box(route_img_bgr, 'yellow')
-                dst_entrance = self._rect_corners(entrance_ann['coordinates'])
-                dst_exit     = self._rect_corners(exit_ann['coordinates'])
+        if src_box is not None:
+            fuse_src.append(src_box)
+            fuse_dst.append(dst_box)
 
-                src_pts_b, dst_pts_b = [], []
-                if src_entrance is not None:
-                    src_pts_b.append(src_entrance)
-                    dst_pts_b.append(dst_entrance)
-                if src_exit is not None:
-                    src_pts_b.append(src_exit)
-                    dst_pts_b.append(dst_exit)
+        if fuse_src:
+            all_src = np.vstack(fuse_src)
+            all_dst = np.vstack(fuse_dst)
+            H, mask = cv2.findHomography(all_src, all_dst, cv2.RANSAC, 5.0)
+            if H is not None:
+                inliers = int(mask.sum()) if mask is not None else len(all_src)
+                n_circ  = len(src_circ) if src_circ is not None else 0
+                n_box   = len(src_box)  if src_box  is not None else 0
+                method  = ('circles+boxes' if n_circ >= MIN_CIRCLE_MATCHES
+                           else 'boxes')
+                print(f"  ✅ Final homography: {inliers}/{len(all_src)} inliers "
+                      f"({n_circ} circles + {n_box} box pts) [{method}]")
+                aligned = cv2.warpPerspective(
+                    route_img_bgr, H, (orig_w, orig_h),
+                    flags=cv2.INTER_LINEAR,
+                    borderMode=cv2.BORDER_CONSTANT,
+                    borderValue=(255, 255, 255))
+                return aligned, method
 
-                if src_pts_b:
-                    src_all = np.vstack(src_pts_b)
-                    dst_all = np.vstack(dst_pts_b)
-                    H, mask = cv2.findHomography(src_all, dst_all, cv2.RANSAC, 5.0)
-                    if H is not None:
-                        inliers = int(mask.sum()) if mask is not None else len(src_all)
-                        print(f"  ✅ Box-based homography ({inliers}/{len(src_all)} inliers)")
-                        aligned = cv2.warpPerspective(
-                            route_img_bgr, H, (orig_w, orig_h),
-                            flags=cv2.INTER_LINEAR,
-                            borderMode=cv2.BORDER_CONSTANT,
-                            borderValue=(255, 255, 255))
-                        return aligned, 'boxes'
-
-        # ── Strategy 3: plain resize ───────────────────────────────────
-        print("  ⚠️  Falling back to plain resize.")
+        # ── Fallback: plain resize ─────────────────────────────────────
+        print("  ⚠️  All alignment strategies failed; falling back to plain resize.")
         aligned = cv2.resize(route_img_bgr, (orig_w, orig_h),
                              interpolation=cv2.INTER_LINEAR)
         return aligned, 'resize'
