@@ -438,12 +438,269 @@ class RouteDeterminer:
         return result
 
     # ──────────────────────────────────────────────────────────────────
+    # Route colour sampling
+    # ──────────────────────────────────────────────────────────────────
+
+    def _sample_route_color(self, aligned_route, candidate_mask, original_img,
+                            min_saturation=30, presence_threshold=0.02):
+        """
+        Sample colors at candidate route pixels, identify the most dominant
+        color bin, and confirm it is absent (or rare) in the original image.
+
+        This is used as a post-processing step after the diff-based candidate
+        mask is built.  When the route image has different dimensions from the
+        original, warping / clipping introduces disconnected fragments and
+        residual artefacts; rebuilding the mask from the *colour* of the route
+        avoids those problems entirely.
+
+        Strategy
+        --------
+        1.  Convert the aligned route and the original to HSV.
+        2.  Collect HSV values at every candidate pixel (non-zero in
+            candidate_mask).
+        3.  Quantize into (H × S × V) bins and rank by frequency.
+        4.  For each bin (most frequent first):
+              a.  Skip achromatic / near-black bins (low saturation) — they are
+                  background artefacts, not a deliberately drawn colour.
+              b.  Build a tolerant HSV range around the bin centre, handling
+                  red-hue wrap-around (H ≈ 0° / 180°).
+              c.  Count how many pixels in the *original* image fall in that
+                  range.  If the fraction exceeds presence_threshold, the colour
+                  is too common in the map background → try the next bin.
+              d.  Accept the first bin that passes the presence test.
+
+        Parameters
+        ----------
+        aligned_route      : BGR image warped to the original's coordinate space
+        candidate_mask     : uint8 binary mask of candidate route pixels
+        original_img       : BGR reference image
+        min_saturation     : HSV-S floor; bins below this are skipped as
+                             achromatic artefacts (default 30)
+        presence_threshold : maximum fraction of original-image pixels that may
+                             share the dominant colour before it is rejected
+                             (default 0.02 = 2 %)
+
+        Returns
+        -------
+        dict with keys lo1, hi1 (uint8 arrays, HSV lower/upper bounds) and
+        lo2, hi2 (same but for the wrap-around band, or None if not needed),
+        or None if no distinctive route colour could be confirmed.
+        """
+        ys, xs = np.where(candidate_mask > 0)
+        if len(ys) < 10:
+            print("    [Color sampling] Too few candidate pixels — skipping.")
+            return None
+
+        hsv_route    = cv2.cvtColor(aligned_route, cv2.COLOR_BGR2HSV)
+        hsv_original = cv2.cvtColor(original_img,  cv2.COLOR_BGR2HSV)
+        hsv_pixels   = hsv_route[ys, xs]   # shape (N, 3): H in [0,179], S,V in [0,255]
+
+        # ── Quantize ──────────────────────────────────────────────────
+        # H → 18 bins (10° each), S → 8 bins (32 levels), V → 4 bins (64 levels)
+        H_bin = (hsv_pixels[:, 0].astype(np.int32) // 10)   # 0–17
+        S_bin = (hsv_pixels[:, 1].astype(np.int32) // 32)   # 0–7
+        V_bin = (hsv_pixels[:, 2].astype(np.int32) // 64)   # 0–3
+        keys  = H_bin * 32 + S_bin * 4 + V_bin              # unique per (H,S,V) triple
+
+        unique_keys, counts = np.unique(keys, return_counts=True)
+        order = np.argsort(-counts)   # most-frequent first
+
+        total_orig_px = float(hsv_original.shape[0] * hsv_original.shape[1])
+        print(f"    [Color sampling] {len(ys)} candidate pixels → "
+              f"{len(unique_keys)} quantized bins")
+
+        # ── Evaluate bins, most frequent first ────────────────────────
+        for rank, idx in enumerate(order):
+            key   = int(unique_keys[idx])
+            count = int(counts[idx])
+            if count < 5:
+                break   # all remaining bins are negligible
+
+            h_bin = key  // 32
+            s_bin = (key %  32) // 4
+            v_bin = key  %   4
+
+            h_c = h_bin * 10 + 5    # bin centre values
+            s_c = s_bin * 32 + 16
+            v_c = v_bin * 64 + 32
+
+            # Skip achromatic / near-black pixels (not a coloured route)
+            if s_c < min_saturation:
+                print(f"    [Color sampling] Rank {rank+1}: H≈{h_c}° S={s_c} V={v_c} "
+                      f"count={count} — skipped (low saturation)")
+                continue
+
+            # ── Tolerant range around bin centre ──────────────────────
+            h_tol, s_tol, v_tol = 15, 50, 70
+
+            s_lo = int(max(0,   s_c - s_tol))
+            s_hi = int(min(255, s_c + s_tol))
+            v_lo = int(max(0,   v_c - v_tol))
+            v_hi = int(min(255, v_c + v_tol))
+
+            h_lo_f = h_c - h_tol
+            h_hi_f = h_c + h_tol
+
+            # Handle hue wrap-around (red straddles 0°/180° in OpenCV)
+            wraps = (h_lo_f < 0) or (h_hi_f > 179)
+            if wraps:
+                lo1 = np.array([max(0, int(h_lo_f) % 180), s_lo, v_lo], dtype=np.uint8)
+                hi1 = np.array([179,                        s_hi, v_hi], dtype=np.uint8)
+                lo2 = np.array([0,                          s_lo, v_lo], dtype=np.uint8)
+                hi2 = np.array([min(179, int(h_hi_f) % 180), s_hi, v_hi], dtype=np.uint8)
+                orig_mask = cv2.bitwise_or(
+                    cv2.inRange(hsv_original, lo1, hi1),
+                    cv2.inRange(hsv_original, lo2, hi2))
+            else:
+                lo1 = np.array([int(h_lo_f), s_lo, v_lo], dtype=np.uint8)
+                hi1 = np.array([int(h_hi_f), s_hi, v_hi], dtype=np.uint8)
+                lo2 = hi2 = None
+                orig_mask = cv2.inRange(hsv_original, lo1, hi1)
+
+            orig_ratio = cv2.countNonZero(orig_mask) / total_orig_px
+
+            print(f"    [Color sampling] Rank {rank+1}: H≈{h_c}°±{h_tol} "
+                  f"S={s_c}±{s_tol} V={v_c}±{v_tol} — "
+                  f"count={count}, orig presence={orig_ratio:.3%}")
+
+            if orig_ratio <= presence_threshold:
+                print(f"    ✅ Route colour confirmed: HSV ≈ ({h_c}, {s_c}, {v_c})")
+                return {'lo1': lo1, 'hi1': hi1, 'lo2': lo2, 'hi2': hi2}
+
+            print(f"       ↳ Too common in original ({orig_ratio:.3%} > "
+                  f"{presence_threshold:.3%}); trying next bin…")
+
+        print("    [Color sampling] No distinctive route colour found; "
+              "will use difference-based mask.")
+        return None
+
+    # ──────────────────────────────────────────────────────────────────
+    # Route mask extraction
+    # ──────────────────────────────────────────────────────────────────
+
+    def _extract_route_mask(self, aligned_route, original_img,
+                            difference_threshold=10, tolerance_px=3):
+        """
+        Isolate the drawn route by removing pixels that also exist in the
+        original image, with a spatial tolerance to absorb residual
+        misalignment after warping.
+
+        Strategy
+        --------
+        1.  Convert both images to greyscale and apply a small Gaussian blur
+            (radius ≈ tolerance_px) so that sub-pixel shift noise is smoothed
+            before any comparison is made.
+
+        2.  Threshold both blurred images to binary "ink" masks.
+            Pixels darker than (255 − difference_threshold) are considered ink.
+
+        3.  Dilate the *original* ink mask by tolerance_px pixels.
+            This creates a "forgiveness zone": any route pixel that falls
+            within tolerance_px of an original ink pixel is considered
+            background and discarded.
+
+        4.  Subtract the dilated original mask from the aligned route mask.
+            Only genuinely new pixels (the drawn route) survive.
+
+        5.  As a safety net, also compute the classic absdiff in colour space
+            and OR it with step 4's result — this catches coloured routes that
+            are lighter than the original background but still visually distinct.
+
+        Parameters
+        ----------
+        aligned_route        : BGR image warped to original's coordinate space
+        original_img         : BGR reference image
+        difference_threshold : ink darkness cutoff (0–255); lower = stricter
+        tolerance_px         : dilation radius to forgive residual misalignment
+
+        Returns
+        -------
+        gray_diff : uint8 greyscale difference map (for threshold step)
+        """
+        # ── Step 1: blur both images ──────────────────────────────────
+        k = max(1, tolerance_px * 2 + 1)           # must be odd
+        blur_ksize = (k | 1, k | 1)                # ensure odd
+        aligned_blur  = cv2.GaussianBlur(aligned_route, blur_ksize, 0)
+        original_blur = cv2.GaussianBlur(original_img,  blur_ksize, 0)
+
+        # ── Step 2: binary ink masks ──────────────────────────────────
+        gray_aligned  = cv2.cvtColor(aligned_blur,  cv2.COLOR_BGR2GRAY)
+        gray_original = cv2.cvtColor(original_blur, cv2.COLOR_BGR2GRAY)
+
+        ink_thresh = max(0, 255 - difference_threshold)
+        _, ink_aligned  = cv2.threshold(
+            gray_aligned,  ink_thresh, 255, cv2.THRESH_BINARY_INV)
+        _, ink_original = cv2.threshold(
+            gray_original, ink_thresh, 255, cv2.THRESH_BINARY_INV)
+
+        # ── Step 3: dilate original ink → forgiveness zone ───────────
+        tol_kernel       = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (tolerance_px * 2 + 1, tolerance_px * 2 + 1))
+        ink_original_fat = cv2.dilate(ink_original, tol_kernel)
+
+        # ── Step 4: new-ink mask (route pixels not in original) ───────
+        new_ink_mask = cv2.subtract(ink_aligned, ink_original_fat)
+
+        # ── Step 5: colour absdiff fallback (catches coloured routes) ─
+        color_diff = cv2.absdiff(aligned_blur, original_blur)
+        gray_color_diff = cv2.cvtColor(color_diff, cv2.COLOR_BGR2GRAY)
+        # Suppress color-diff where the original already has ink
+        # (avoid re-introducing background artefacts)
+        gray_color_diff = cv2.subtract(gray_color_diff,
+                                       cv2.dilate(ink_original, tol_kernel))
+
+        # Merge: take the maximum signal from both strategies
+        gray_diff = cv2.max(new_ink_mask, gray_color_diff)
+
+        n_ink   = cv2.countNonZero(new_ink_mask)
+        n_col   = cv2.countNonZero(gray_color_diff)
+        n_merge = cv2.countNonZero(gray_diff)
+        print(f"    Ink-subtraction pixels : {n_ink}")
+        print(f"    Colour-diff pixels     : {n_col}")
+        print(f"    Merged diff pixels     : {n_merge}")
+
+        # ── Step 6: colour-sampling refinement ────────────────────────
+        # Use the merged diff as a cheap candidate set, then ask
+        # _sample_route_color to identify the single dominant route colour
+        # that is absent from the original image.  If confirmed, rebuild
+        # the mask purely by colour matching against aligned_route — this
+        # is far more robust than the diff approach when dimension
+        # differences cause warping clipping or residual misalignment.
+        print("\n    [Step 6] Colour-sampling refinement…")
+        _, candidate_mask = cv2.threshold(
+            gray_diff, difference_threshold, 255, cv2.THRESH_BINARY)
+
+        color_result = self._sample_route_color(
+            aligned_route, candidate_mask, original_img)
+
+        if color_result is not None:
+            hsv_aligned = cv2.cvtColor(aligned_route, cv2.COLOR_BGR2HSV)
+            color_mask  = cv2.inRange(hsv_aligned,
+                                      color_result['lo1'], color_result['hi1'])
+            if color_result['lo2'] is not None:
+                # Merge the wrap-around band (e.g. red hue near 0°/180°)
+                color_mask = cv2.bitwise_or(
+                    color_mask,
+                    cv2.inRange(hsv_aligned,
+                                color_result['lo2'], color_result['hi2']))
+
+            # No subtraction needed: _sample_route_color already verified
+            # that this colour is rare/absent in the original image, so every
+            # pixel that matches the colour is genuine route.
+            n_color = cv2.countNonZero(color_mask)
+            print(f"    Color-based mask pixels : {n_color}")
+            return color_mask, True
+
+        # No distinctive colour found — fall back to the diff-based mask.
+        return gray_diff, False
+
+    # ──────────────────────────────────────────────────────────────────
     # Main entry point
     # ──────────────────────────────────────────────────────────────────
 
     def determine_route(self, route_image_path, original_image_path,
                         difference_threshold=10, output_path='route_endpoints.png',
-                        marker_size=10):
+                        marker_size=10, tolerance_px=3):
         print("\n" + "="*70)
         print("ROUTE DETERMINATION")
         print("="*70)
@@ -459,6 +716,7 @@ class RouteDeterminer:
 
         print(f"    Route image:    {route_img.shape[:2]} (H x W)")
         print(f"    Original image: {original_img.shape[:2]} (H x W)")
+        print(f"    tolerance_px:   {tolerance_px}")
 
         # ── Align ─────────────────────────────────────────────────────
         print("\n[2/5] Aligning route image to original coordinate space…")
@@ -474,38 +732,52 @@ class RouteDeterminer:
 
         # ── Difference ────────────────────────────────────────────────
         print("\n[3/5] Computing image difference…")
-        difference = cv2.absdiff(aligned_route, original_img)
-        gray_diff  = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
+        print(f"    tolerance_px={tolerance_px}  threshold={difference_threshold}")
+        route_mask, is_color_based = self._extract_route_mask(
+            aligned_route, original_img,
+            difference_threshold=difference_threshold,
+            tolerance_px=tolerance_px,
+        )
 
-        # ── Threshold ─────────────────────────────────────────────────
-        # Converts the greyscale difference into a binary route mask.
-        # All downstream steps (morphology, skeletonization, endpoint search)
-        # operate on this binary mask.
-        print(f"\n[4/5] Applying threshold (threshold={difference_threshold})…")
-        _, mask_threshold = cv2.threshold(
-            gray_diff, difference_threshold, 255, cv2.THRESH_BINARY)
-        print(f"    Detected {cv2.countNonZero(mask_threshold)} changed pixels")
+        if is_color_based:
+            # Color sampling found a distinctive route colour — the returned
+            # mask is already a clean binary mask covering all route pixels.
+            # Threshold, morphology, and skeletonization are not needed;
+            # use the mask directly to preserve the route in its original form.
+            print("\n[4/5] Skipping threshold  (color-based mask is already binary)")
+            print("[5/5] Skipping morphology (color-based mask is already clean)")
+            print("\nSkipping skeletonization  (preserving original route shape)")
+            final_mask = route_mask
+        else:
+            # ── Threshold ─────────────────────────────────────────────
+            # Converts the greyscale difference into a binary route mask.
+            # All downstream steps (morphology, skeletonization, endpoint
+            # search) operate on this binary mask.
+            print(f"\n[4/5] Applying threshold (threshold={difference_threshold})…")
+            _, mask_threshold = cv2.threshold(
+                route_mask, difference_threshold, 255, cv2.THRESH_BINARY)
+            print(f"    Detected {cv2.countNonZero(mask_threshold)} changed pixels")
 
-        # ── Morphology ────────────────────────────────────────────────
-        # CLOSE fills small gaps in the drawn route line so the
-        # skeleton stays connected through the entrance/exit boxes.
-        # OPEN removes isolated noise specks that would otherwise produce spurious
-        # skeleton branches and slow down skeletonization.
-        print("\n[5/5] Applying morphological operations…")
-        kernel      = np.ones((2, 2), np.uint8)
-        mask_closed = cv2.morphologyEx(mask_threshold, cv2.MORPH_CLOSE, kernel, iterations=1)
-        mask_opened = cv2.morphologyEx(mask_closed,    cv2.MORPH_OPEN,  kernel, iterations=1)
-        print(f"    After morphology: {cv2.countNonZero(mask_opened)} pixels")
+            # ── Morphology ────────────────────────────────────────────
+            # CLOSE fills small gaps in the drawn route line so the
+            # skeleton stays connected through the entrance/exit boxes.
+            # OPEN removes isolated noise specks that would otherwise
+            # produce spurious skeleton branches and slow down skeletonization.
+            print("\n[5/5] Applying morphological operations…")
+            kernel      = np.ones((2, 2), np.uint8)
+            mask_closed = cv2.morphologyEx(mask_threshold, cv2.MORPH_CLOSE, kernel, iterations=1)
+            mask_opened = cv2.morphologyEx(mask_closed,    cv2.MORPH_OPEN,  kernel, iterations=1)
+            print(f"    After morphology: {cv2.countNonZero(mask_opened)} pixels")
 
-        # ── Skeletonize ───────────────────────────────────────────────
-        print("\nSkeletonizing route…")
-        skeleton = self._skeletonize(mask_opened)
-        print(f"    Skeleton: {cv2.countNonZero(skeleton)} pixels")
+            # ── Skeletonize ───────────────────────────────────────────
+            print("\nSkeletonizing route…")
+            final_mask = self._skeletonize(mask_opened)
+            print(f"    Skeleton: {cv2.countNonZero(final_mask)} pixels")
 
         # ── Endpoints ─────────────────────────────────────────────────
-        raw_pts = np.column_stack(np.where(skeleton > 0))
+        raw_pts = np.column_stack(np.where(final_mask > 0))
         if len(raw_pts) == 0:
-            print("ERROR: No skeleton points found!")
+            print("ERROR: No route points found!")
             return
         points    = [(int(p[1]), int(p[0])) for p in raw_pts]
         endpoints = self._find_route_endpoints_by_boxes(points)
@@ -513,7 +785,7 @@ class RouteDeterminer:
         # ── Visualise ─────────────────────────────────────────────────
         print("\n" + "="*70)
         print("Creating visualization…")
-        self._create_visualization(aligned_route, skeleton, points,
+        self._create_visualization(aligned_route, final_mask, points,
                                    endpoints, output_path, marker_size,
                                    alignment_method)
 
@@ -645,6 +917,10 @@ Example:
     parser.add_argument('--original-image',       required=True)
     parser.add_argument('--annotations',          required=True)
     parser.add_argument('--difference-threshold', type=int, default=10)
+    parser.add_argument('--tolerance',            type=int, default=3,
+                        help='Dilation radius (px) used to forgive residual '
+                             'misalignment when subtracting the original image '
+                             '(default: 3; increase to 5-8 for larger dimension gaps)')
     parser.add_argument('--output',               default='route_endpoints.png')
     parser.add_argument('--marker-size',          type=int, default=15)
 
@@ -656,6 +932,7 @@ Example:
         difference_threshold = args.difference_threshold,
         output_path          = args.output,
         marker_size          = args.marker_size,
+        tolerance_px         = args.tolerance,
     )
 
 
