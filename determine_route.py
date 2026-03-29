@@ -719,16 +719,14 @@ class RouteDeterminer:
         print(f"    tolerance_px:   {tolerance_px}")
 
         # ── Align ─────────────────────────────────────────────────────
+        # Always align, even when dimensions match — same size does not
+        # guarantee the same coordinate space (e.g. the route image may have
+        # been re-exported at the same resolution but with a different crop or
+        # padding). Alignment ensures annotations land at the correct pixels.
         print("\n[2/5] Aligning route image to original coordinate space…")
-        same_size = (route_img.shape[:2] == original_img.shape[:2])
-        if same_size:
-            print("    Images are the same size — skipping alignment.")
-            aligned_route    = route_img
-            alignment_method = 'none'
-        else:
-            aligned_route, alignment_method = self._align_route_image(
-                route_img, original_img)
-            print(f"    Alignment method used: {alignment_method}")
+        aligned_route, alignment_method = self._align_route_image(
+            route_img, original_img)
+        print(f"    Alignment method used: {alignment_method}")
 
         # ── Difference ────────────────────────────────────────────────
         print("\n[3/5] Computing image difference…")
@@ -818,52 +816,117 @@ class RouteDeterminer:
         def rsz(img):
             return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
+        def sx(v): return int(v * scale)   # scale a single coordinate value
+
         vis_img = rsz(route_img.copy())
+
+        # ── Route mask overlay (dark red) ─────────────────────────────
         vis_img[rsz(skeleton) > 0] = np.array([139, 0, 0], dtype=np.uint8)
 
-        ms = int(marker_size * scale)
-        if endpoints['start']:
-            sp = (int(endpoints['start'][0]*scale), int(endpoints['start'][1]*scale))
-            cv2.circle(vis_img, sp, ms, (0,255,0), -1)
-            cv2.circle(vis_img, sp, ms+2, (255,255,255), 2)
-            cv2.putText(vis_img, "START", (sp[0]+ms+5, sp[1]),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+        # ── Floor area (magenta outline) ──────────────────────────────
+        # Drawn first so all other annotations render on top of it.
+        for fa in self.annotations.get('floor_areas', []):
+            if fa['shape'] == 'rectangle':
+                c = fa['coordinates']
+                pt1 = (sx(c['x']),             sx(c['y']))
+                pt2 = (sx(c['x'] + c['width']), sx(c['y'] + c['height']))
+                # Simulate a dashed outline by alternating draw / skip in
+                # fixed-length segments along each edge.
+                def _draw_dashed_rect(img, p1, p2, color, dash=12, gap=6):
+                    x1, y1 = p1;  x2, y2 = p2
+                    for edge in [((x1,y1),(x2,y1)), ((x2,y1),(x2,y2)),
+                                 ((x2,y2),(x1,y2)), ((x1,y2),(x1,y1))]:
+                        (ex1,ey1),(ex2,ey2) = edge
+                        length = math.hypot(ex2-ex1, ey2-ey1)
+                        if length == 0:
+                            continue
+                        dx, dy = (ex2-ex1)/length, (ey2-ey1)/length
+                        pos = 0.0
+                        drawing = True
+                        while pos < length:
+                            seg_len = min(dash if drawing else gap, length - pos)
+                            if drawing:
+                                p_start = (int(ex1 + dx*pos),        int(ey1 + dy*pos))
+                                p_end   = (int(ex1 + dx*(pos+seg_len)), int(ey1 + dy*(pos+seg_len)))
+                                cv2.line(img, p_start, p_end, color, 1)
+                            pos    += seg_len
+                            drawing = not drawing
+                _draw_dashed_rect(vis_img, pt1, pt2, (255, 0, 255))
 
-        if endpoints['end']:
-            ep = (int(endpoints['end'][0]*scale), int(endpoints['end'][1]*scale))
-            cv2.circle(vis_img, ep, ms, (0,0,255), -1)
-            cv2.circle(vis_img, ep, ms+2, (255,255,255), 2)
-            cv2.putText(vis_img, "END", (ep[0]+ms+5, ep[1]),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+        # ── Walls (cyan polylines) ────────────────────────────────────
+        for wall in self.annotations.get('walls', []):
+            if wall['shape'] == 'polyline':
+                pts = wall['coordinates']['points']
+                arr = np.array([[sx(p['x']), sx(p['y'])] for p in pts],
+                               dtype=np.int32).reshape(-1, 1, 2)
+                cv2.polylines(vis_img, [arr], isClosed=False,
+                              color=(255, 255, 0), thickness=1)
 
+        # ── Exhibits (orange circle outlines + exhibit number) ────────
+        for ex in self.exhibits:
+            if ex['shape'] == 'circle':
+                c  = ex['coordinates']
+                cx = sx(c['center_x'])
+                cy = sx(c['center_y'])
+                r  = max(3, sx(c['radius']))
+                cv2.circle(vis_img, (cx, cy), r, (0, 165, 255), 1)
+                label = str(ex.get('exhibit_number', ''))
+                if label:
+                    font_scale = max(0.25, scale * 0.55)
+                    (tw, th), _ = cv2.getTextSize(
+                        label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 1)
+                    cv2.putText(vis_img, label,
+                                (cx - tw // 2, cy + th // 2),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                font_scale, (0, 165, 255), 1, cv2.LINE_AA)
+
+        # ── Entrance boxes (green) ────────────────────────────────────
         for entrance in self.entrances:
             if entrance['shape'] == 'rectangle':
                 c = entrance['coordinates']
                 cv2.rectangle(vis_img,
-                              (int(c['x']*scale), int(c['y']*scale)),
-                              (int((c['x']+c['width'])*scale),
-                               int((c['y']+c['height'])*scale)),
-                              (0,255,0), 2)
+                              (sx(c['x']),              sx(c['y'])),
+                              (sx(c['x'] + c['width']), sx(c['y'] + c['height'])),
+                              (0, 255, 0), 2)
                 cv2.putText(vis_img, "ENTRANCE",
-                            (int(c['x']*scale)+5, int(c['y']*scale)-10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 2)
+                            (sx(c['x']) + 5, sx(c['y']) - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
+        # ── Exit boxes (yellow) ───────────────────────────────────────
         for exit_ann in self.exits:
             if exit_ann['shape'] == 'rectangle':
                 c = exit_ann['coordinates']
                 cv2.rectangle(vis_img,
-                              (int(c['x']*scale), int(c['y']*scale)),
-                              (int((c['x']+c['width'])*scale),
-                               int((c['y']+c['height'])*scale)),
-                              (255,255,0), 2)
+                              (sx(c['x']),              sx(c['y'])),
+                              (sx(c['x'] + c['width']), sx(c['y'] + c['height'])),
+                              (255, 255, 0), 2)
                 cv2.putText(vis_img, "EXIT",
-                            (int(c['x']*scale)+5, int(c['y']*scale)-10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,0), 2)
+                            (sx(c['x']) + 5, sx(c['y']) - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 
-        legend = np.ones((170, vis_img.shape[1], 3), dtype=np.uint8) * 40
-        final  = np.vstack([vis_img, legend])
-        pil    = PILImage.fromarray(cv2.cvtColor(final, cv2.COLOR_BGR2RGB))
-        draw   = ImageDraw.Draw(pil)
+        # ── START / END endpoint markers ──────────────────────────────
+        ms = int(marker_size * scale)
+        if endpoints['start']:
+            sp = (sx(endpoints['start'][0]), sx(endpoints['start'][1]))
+            cv2.circle(vis_img, sp, ms, (0, 255, 0), -1)
+            cv2.circle(vis_img, sp, ms + 2, (255, 255, 255), 2)
+            cv2.putText(vis_img, "START", (sp[0] + ms + 5, sp[1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        if endpoints['end']:
+            ep = (sx(endpoints['end'][0]), sx(endpoints['end'][1]))
+            cv2.circle(vis_img, ep, ms, (0, 0, 255), -1)
+            cv2.circle(vis_img, ep, ms + 2, (255, 255, 255), 2)
+            cv2.putText(vis_img, "END", (ep[0] + ms + 5, ep[1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        # ── Legend ────────────────────────────────────────────────────
+        # 8 items at 2 per row = 4 rows; 30 px row height + 55 px header.
+        legend_h = 55 + 4 * 30 + 15          # ≈ 220 px
+        legend   = np.ones((legend_h, vis_img.shape[1], 3), dtype=np.uint8) * 40
+        final    = np.vstack([vis_img, legend])
+        pil      = PILImage.fromarray(cv2.cvtColor(final, cv2.COLOR_BGR2RGB))
+        draw     = ImageDraw.Draw(pil)
 
         try:
             tf = ImageFont.truetype("arial.ttf", 28)
@@ -872,24 +935,39 @@ class RouteDeterminer:
             tf = lf = ImageFont.load_default()
 
         base = vis_img.shape[0]
-        draw.text((20, base+8),
+        draw.text((20, base + 8),
                   f"Route Endpoint Determination  [alignment: {alignment_method}]",
-                  fill=(255,255,0), font=tf)
+                  fill=(255, 255, 0), font=tf)
 
+        # Each tuple: (RGB color, shape, label)
+        # shape: 'circle_fill' | 'circle_outline' | 'rect' | 'line'
         items = [
-            ((0,255,0),   False, "= START (route pixel in entrance box)"),
-            ((255,0,0),   False, "= END (route pixel in exit box)"),
-            ((0,255,0),   True,  "= Entrance box"),
-            ((255,255,0), True,  "= Exit box"),
+            ((139,   0,   0), 'circle_fill',    "= Detected route"),
+            ((  0, 255,   0), 'circle_fill',    "= START point"),
+            ((255,   0,   0), 'circle_fill',    "= END point"),
+            ((  0, 255,   0), 'rect',           "= Entrance box"),
+            ((255, 255,   0), 'rect',           "= Exit box"),
+            ((255, 255,   0), 'line',           "= Wall"),
+            ((255, 165,   0), 'circle_outline', "= Exhibit"),
+            ((255,   0, 255), 'line',           "= Floor area"),
         ]
-        for i, (color, is_rect, label) in enumerate(items):
-            lx = 20 + (i % 2) * 440
-            ly = base + 50 + (i // 2) * 30
-            if is_rect:
-                draw.rectangle([lx, ly, lx+20, ly+18], outline=color, width=2)
-            else:
-                draw.ellipse([lx, ly, lx+18, ly+18], fill=color)
-            draw.text((lx+28, ly), label, fill=(255,255,255), font=lf)
+        for i, (color, shape, label) in enumerate(items):
+            col = i % 2
+            row = i // 2
+            lx  = 20  + col * 440
+            ly  = base + 55 + row * 30
+            mx  = lx + 10   # midpoint of the 20-px icon slot
+
+            if shape == 'circle_fill':
+                draw.ellipse([lx, ly, lx + 18, ly + 18], fill=color)
+            elif shape == 'circle_outline':
+                draw.ellipse([lx, ly, lx + 18, ly + 18], outline=color, width=2)
+            elif shape == 'rect':
+                draw.rectangle([lx, ly, lx + 20, ly + 18], outline=color, width=2)
+            elif shape == 'line':
+                draw.line([(lx, ly + 9), (lx + 20, ly + 9)], fill=color, width=2)
+
+            draw.text((lx + 28, ly), label, fill=(255, 255, 255), font=lf)
 
         pil.save(output_path)
         print(f"\n✅ Visualization saved to: {output_path} "
