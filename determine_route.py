@@ -438,6 +438,101 @@ class RouteDeterminer:
         return result
 
     # ──────────────────────────────────────────────────────────────────
+    # Connectivity check
+    # ──────────────────────────────────────────────────────────────────
+
+    def _check_route_connectivity(self, final_mask, noise_threshold_ratio=0.01):
+        """
+        Check whether the route pixels form a single connected line.
+
+        Uses cv2.connectedComponentsWithStats to label every contiguous island
+        of non-zero pixels in final_mask.  The largest island is assumed to be
+        the true route; all others are considered disconnected fragments.
+        Fragments whose area is below noise_threshold_ratio × (largest island
+        area) are classified as noise rather than genuine disconnections.
+
+        Parameters
+        ----------
+        final_mask            : uint8 binary mask (route pixels = 255)
+        noise_threshold_ratio : fragments smaller than this fraction of the
+                                main route are treated as noise (default 1 %)
+
+        Returns
+        -------
+        dict with keys:
+          is_connected   – True if only one meaningful component was found
+          num_components – total labelled components (excluding background)
+          num_fragments  – components that are large enough to be non-noise
+          main_size      – pixel count of the largest component
+          fragments      – list of dicts {label, size, centroid} for every
+                           non-main component above the noise threshold,
+                           sorted largest → smallest
+        """
+        print("\n[Connectivity Check]")
+        total_px = cv2.countNonZero(final_mask)
+        if total_px == 0:
+            print("  ⚠️  Mask is empty — cannot check connectivity.")
+            return {'is_connected': False, 'num_components': 0,
+                    'num_fragments': 0, 'main_size': 0, 'fragments': []}
+
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            final_mask, connectivity=8)
+
+        # Label 0 is background — skip it.
+        # stats columns: CC_STAT_LEFT, CC_STAT_TOP, CC_STAT_WIDTH,
+        #                CC_STAT_HEIGHT, CC_STAT_AREA
+        component_areas = [
+            (label, int(stats[label, cv2.CC_STAT_AREA]),
+             (float(centroids[label][0]), float(centroids[label][1])))
+            for label in range(1, num_labels)   # skip background (0)
+        ]
+
+        # Sort largest → smallest
+        component_areas.sort(key=lambda x: x[1], reverse=True)
+        num_components = len(component_areas)
+
+        if num_components == 0:
+            print("  ⚠️  No components found.")
+            return {'is_connected': False, 'num_components': 0,
+                    'num_fragments': 0, 'main_size': 0, 'fragments': []}
+
+        main_label, main_size, main_centroid = component_areas[0]
+        noise_cutoff = max(1, int(main_size * noise_threshold_ratio))
+
+        fragments = [
+            {'label': lbl, 'size': sz,
+             'centroid': (round(cx, 1), round(cy, 1))}
+            for lbl, sz, (cx, cy) in component_areas[1:]
+            if sz >= noise_cutoff
+        ]
+
+        is_connected  = (len(fragments) == 0)
+        num_fragments = len(fragments)
+
+        print(f"  Total route pixels   : {total_px}")
+        print(f"  Connected components : {num_components}  "
+              f"(noise cutoff < {noise_cutoff} px)")
+        print(f"  Main route size      : {main_size} px  "
+              f"@ centroid {(round(main_centroid[0],1), round(main_centroid[1],1))}")
+
+        if is_connected:
+            print("  ✅ Route is fully connected — single continuous line.")
+        else:
+            print(f"  ❌ Route has {num_fragments} disconnected fragment(s):")
+            for i, frag in enumerate(fragments, 1):
+                pct = frag['size'] / main_size * 100
+                print(f"     Fragment {i}: {frag['size']} px "
+                      f"({pct:.1f}% of main)  @ centroid {frag['centroid']}")
+
+        return {
+            'is_connected'  : is_connected,
+            'num_components': num_components,
+            'num_fragments' : num_fragments,
+            'main_size'     : main_size,
+            'fragments'     : fragments,
+        }
+
+    # ──────────────────────────────────────────────────────────────────
     # Route colour sampling
     # ──────────────────────────────────────────────────────────────────
 
@@ -772,6 +867,9 @@ class RouteDeterminer:
             final_mask = self._skeletonize(mask_opened)
             print(f"    Skeleton: {cv2.countNonZero(final_mask)} pixels")
 
+        # ── Connectivity check ────────────────────────────────────────
+        connectivity = self._check_route_connectivity(final_mask)
+
         # ── Endpoints ─────────────────────────────────────────────────
         raw_pts = np.column_stack(np.where(final_mask > 0))
         if len(raw_pts) == 0:
@@ -792,6 +890,11 @@ class RouteDeterminer:
         print("SUMMARY")
         print("="*70)
         print(f"Alignment method : {alignment_method}")
+        if connectivity['is_connected']:
+            print(f"✅ ROUTE: Fully connected  ({connectivity['main_size']} px)")
+        else:
+            print(f"❌ ROUTE: {connectivity['num_fragments']} disconnected fragment(s)  "
+                  f"(main = {connectivity['main_size']} px)")
         if endpoints['start']:
             print(f"✅ START: {endpoints['start']}")
         else:
