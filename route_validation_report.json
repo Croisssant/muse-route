@@ -2,8 +2,21 @@
   "validation_summary": {
     "is_valid": true,
     "total_violations": 0,
-    "route_length_pixels": 6343,
-    "exhibits_visited": []
+    "route_length_pixels": 3592,
+    "exhibits_visited": [
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40"
+    ]
   },
   "violations": {
     "wall_crossings": [],
@@ -16,403 +29,403 @@
   "exhibit_visits": {
     "1": {
       "visited": false,
-      "closest_distance": 63.06346010171025
+      "closest_distance": 621.5858750003896
     },
     "2": {
-      "visited": false,
-      "closest_distance": 115.88356225108029
+      "visited": true,
+      "closest_distance": 28.160255680657446
     },
     "3": {
-      "visited": false,
-      "closest_distance": 67.0
+      "visited": true,
+      "closest_distance": 33.54101966249684
     },
     "4": {
-      "visited": false,
-      "closest_distance": 65.0
+      "visited": true,
+      "closest_distance": 30.0
     },
     "5": {
-      "visited": false,
-      "closest_distance": 65.0
+      "visited": true,
+      "closest_distance": 37.0
     },
     "6": {
-      "visited": false,
-      "closest_distance": 63.788713735268246
+      "visited": true,
+      "closest_distance": 34.23448553724738
     },
     "7": {
-      "visited": false,
-      "closest_distance": 284.01584462842914
+      "visited": true,
+      "closest_distance": 35.0
     },
     "8": {
-      "visited": false,
-      "closest_distance": 284.0
+      "visited": true,
+      "closest_distance": 37.8549864614954
     },
     "9": {
       "visited": false,
-      "closest_distance": 125.39936203984452
+      "closest_distance": 184.8053029542172
     },
     "10": {
       "visited": false,
-      "closest_distance": 114.93476410555685
+      "closest_distance": 287.5865087238968
     },
     "11": {
       "visited": false,
-      "closest_distance": 93.04837451562494
+      "closest_distance": 329.00455923892605
     },
     "12": {
       "visited": false,
-      "closest_distance": 76.69419795525604
+      "closest_distance": 366.001366117669
     },
     "13": {
       "visited": false,
-      "closest_distance": 62.81719509815764
+      "closest_distance": 408.0024509730303
     },
     "14": {
       "visited": false,
-      "closest_distance": 54.0
+      "closest_distance": 450.40870329068906
     },
     "15": {
       "visited": false,
-      "closest_distance": 53.0
+      "closest_distance": 496.7514469027745
     },
     "16": {
       "visited": false,
-      "closest_distance": 54.0
+      "closest_distance": 547.0831746635972
     },
     "17": {
       "visited": false,
-      "closest_distance": 55.0
+      "closest_distance": 598.1178813578474
     },
     "18": {
       "visited": false,
-      "closest_distance": 424.5479949310796
+      "closest_distance": 392.9198391529753
     },
     "19": {
       "visited": false,
-      "closest_distance": 458.69597774560873
+      "closest_distance": 351.0
     },
     "20": {
       "visited": false,
-      "closest_distance": 471.39367836236414
+      "closest_distance": 303.3100723681955
     },
     "21": {
       "visited": false,
-      "closest_distance": 453.1842892245935
+      "closest_distance": 260.3862515571819
     },
     "22": {
       "visited": false,
-      "closest_distance": 436.4000458295118
+      "closest_distance": 212.20744567521658
     },
     "23": {
       "visited": false,
-      "closest_distance": 424.8599769335775
+      "closest_distance": 171.1724276862369
     },
     "24": {
       "visited": false,
-      "closest_distance": 397.81905434506274
+      "closest_distance": 244.57309745759036
     },
     "25": {
       "visited": false,
-      "closest_distance": 398.0
+      "closest_distance": 281.55461281960913
     },
     "26": {
       "visited": false,
-      "closest_distance": 397.0050377514119
+      "closest_distance": 324.154284253656
     },
     "27": {
       "visited": false,
-      "closest_distance": 400.8840231288845
+      "closest_distance": 363.6550563377333
     },
     "28": {
       "visited": false,
-      "closest_distance": 380.6231732304275
+      "closest_distance": 413.55652576159406
     },
     "29": {
       "visited": false,
-      "closest_distance": 344.59541494337964
+      "closest_distance": 455.2812317677943
     },
     "30": {
       "visited": false,
-      "closest_distance": 122.0
+      "closest_distance": 444.8303047230483
     },
     "31": {
       "visited": false,
-      "closest_distance": 177.0
+      "closest_distance": 391.69503443367773
     },
     "32": {
       "visited": false,
-      "closest_distance": 233.0
+      "closest_distance": 337.64034119162955
     },
     "33": {
       "visited": false,
-      "closest_distance": 283.0
+      "closest_distance": 290.0017241328058
     },
     "34": {
       "visited": false,
-      "closest_distance": 339.0
+      "closest_distance": 237.36048533822978
     },
     "35": {
       "visited": false,
-      "closest_distance": 395.0
+      "closest_distance": 186.04300578092153
     },
     "36": {
-      "visited": false,
-      "closest_distance": 386.17224136387637
+      "visited": true,
+      "closest_distance": 38.58756276314948
     },
     "37": {
-      "visited": false,
-      "closest_distance": 365.65694304908254
+      "visited": true,
+      "closest_distance": 29.732137494637012
     },
     "38": {
-      "visited": false,
-      "closest_distance": 342.720002334267
+      "visited": true,
+      "closest_distance": 37.8021163428716
     },
     "39": {
-      "visited": false,
-      "closest_distance": 327.96341259353915
+      "visited": true,
+      "closest_distance": 34.0
     },
     "40": {
-      "visited": false,
-      "closest_distance": 282.0815484926301
+      "visited": true,
+      "closest_distance": 33.95585369269929
     },
     "41": {
       "visited": false,
-      "closest_distance": 379.3283538044579
+      "closest_distance": 804.5035736402915
     },
     "42": {
       "visited": false,
-      "closest_distance": 346.1574786134195
+      "closest_distance": 818.8852178419146
     },
     "43": {
       "visited": false,
-      "closest_distance": 312.9472799050984
+      "closest_distance": 836.1459202794689
     },
     "44": {
       "visited": false,
-      "closest_distance": 290.766229125736
+      "closest_distance": 847.339365307667
     },
     "45": {
       "visited": false,
-      "closest_distance": 244.29695045169925
+      "closest_distance": 461.2905808706698
     },
     "46": {
       "visited": false,
-      "closest_distance": 226.45087767549057
+      "closest_distance": 472.1747557843388
     },
     "47": {
       "visited": false,
-      "closest_distance": 172.6759971738979
+      "closest_distance": 482.83019789569914
     },
     "48": {
       "visited": false,
-      "closest_distance": 126.0
+      "closest_distance": 498.06124121437114
     },
     "49": {
       "visited": false,
-      "closest_distance": 226.00884938426637
+      "closest_distance": 814.0786202818497
     },
     "50": {
       "visited": false,
-      "closest_distance": 221.18318200080222
+      "closest_distance": 800.3624179082874
     },
     "51": {
       "visited": false,
-      "closest_distance": 219.0
+      "closest_distance": 784.23529632375
     },
     "52": {
       "visited": false,
-      "closest_distance": 219.0
+      "closest_distance": 774.6483072982217
     },
     "53": {
       "visited": false,
-      "closest_distance": 215.87033144922904
+      "closest_distance": 796.8268318775416
     },
     "54": {
       "visited": false,
-      "closest_distance": 218.92921230388603
+      "closest_distance": 813.203541556479
     },
     "55": {
       "visited": false,
-      "closest_distance": 214.75800334329801
+      "closest_distance": 832.094345612323
     },
     "56": {
       "visited": false,
-      "closest_distance": 202.52654147049466
+      "closest_distance": 851.9888496922949
     },
     "57": {
       "visited": false,
-      "closest_distance": 193.74725804511402
+      "closest_distance": 874.0692192269443
     },
     "58": {
       "visited": false,
-      "closest_distance": 192.0
+      "closest_distance": 897.8446413494931
     },
     "59": {
       "visited": false,
-      "closest_distance": 192.50974001333023
+      "closest_distance": 925.5625316530483
     },
     "60": {
       "visited": false,
-      "closest_distance": 195.25624189766637
+      "closest_distance": 955.4041029847004
     },
     "61": {
       "visited": false,
-      "closest_distance": 69.29646455628166
+      "closest_distance": 758.5598196582785
     },
     "62": {
       "visited": false,
-      "closest_distance": 68.59300255857006
+      "closest_distance": 774.696069436266
     },
     "63": {
       "visited": false,
-      "closest_distance": 79.88116173416608
+      "closest_distance": 802.2767602267936
     },
     "64": {
       "visited": false,
-      "closest_distance": 97.8008179924892
+      "closest_distance": 836.9301046085031
     },
     "65": {
       "visited": false,
-      "closest_distance": 136.0
+      "closest_distance": 870.1126363868071
     },
     "66": {
       "visited": false,
-      "closest_distance": 173.11845655504212
+      "closest_distance": 892.8611314196626
     },
     "67": {
       "visited": false,
-      "closest_distance": 218.49713956937742
+      "closest_distance": 636.9442675776272
     },
     "68": {
       "visited": false,
-      "closest_distance": 238.24777018893587
+      "closest_distance": 687.6118090899836
     },
     "69": {
       "visited": false,
-      "closest_distance": 268.79360111431225
+      "closest_distance": 751.6515149988059
     },
     "70": {
       "visited": false,
-      "closest_distance": 135.0
+      "closest_distance": 758.9321445294039
     },
     "71": {
       "visited": false,
-      "closest_distance": 116.03878661895772
+      "closest_distance": 865.1965094705364
     },
     "72": {
       "visited": false,
-      "closest_distance": 112.0
+      "closest_distance": 957.9232745893587
     },
     "73": {
       "visited": false,
-      "closest_distance": 86.58521813797087
+      "closest_distance": 1106.3498542504537
     },
     "74": {
       "visited": false,
-      "closest_distance": 83.0
+      "closest_distance": 1149.4977163961657
     },
     "75": {
       "visited": false,
-      "closest_distance": 86.68333173107735
+      "closest_distance": 1201.394606280551
     },
     "76": {
       "visited": false,
-      "closest_distance": 103.36827366266692
+      "closest_distance": 1246.8528381489132
     },
     "77": {
       "visited": false,
-      "closest_distance": 173.9482681718907
+      "closest_distance": 1352.0451175903856
     },
     "78": {
       "visited": false,
-      "closest_distance": 118.64337318198602
+      "closest_distance": 1328.694566106146
     },
     "79": {
       "visited": false,
-      "closest_distance": 101.20523701864444
+      "closest_distance": 1309.516132012126
     },
     "80": {
       "visited": false,
-      "closest_distance": 80.50155278005512
+      "closest_distance": 1296.6042187190353
     },
     "81": {
       "visited": false,
-      "closest_distance": 77.64663547121665
+      "closest_distance": 1295.0247101889602
     },
     "82": {
       "visited": false,
-      "closest_distance": 69.0
+      "closest_distance": 1301.181002013171
     },
     "83": {
       "visited": false,
-      "closest_distance": 140.77730640980457
+      "closest_distance": 1360.7609084626145
     },
     "84": {
       "visited": false,
-      "closest_distance": 231.25094594401122
+      "closest_distance": 1395.151963049187
     },
     "85": {
       "visited": false,
-      "closest_distance": 194.3707796969493
+      "closest_distance": 1059.545657345638
     },
     "86": {
       "visited": false,
-      "closest_distance": 228.21481108815001
+      "closest_distance": 1020.251439597122
     },
     "87": {
       "visited": false,
-      "closest_distance": 239.20075250717753
+      "closest_distance": 1042.84466724436
     },
     "88": {
       "visited": false,
-      "closest_distance": 280.14639030335553
+      "closest_distance": 1100.7270324653612
     },
     "89": {
       "visited": false,
-      "closest_distance": 311.20732639190874
+      "closest_distance": 1149.4851021218153
     },
     "90": {
       "visited": false,
-      "closest_distance": 353.5109616405126
+      "closest_distance": 1198.199065264199
     },
     "91": {
       "visited": false,
-      "closest_distance": 234.9170066214875
+      "closest_distance": 1058.9239821630258
     },
     "92": {
       "visited": false,
-      "closest_distance": 541.4240482283734
+      "closest_distance": 1370.6618839086466
     },
     "93": {
       "visited": false,
-      "closest_distance": 364.7793853824528
+      "closest_distance": 1252.750972859331
     },
     "94": {
       "visited": false,
-      "closest_distance": 421.88416656708034
+      "closest_distance": 1431.2760914652351
     },
     "95": {
       "visited": false,
-      "closest_distance": 588.1037323465989
+      "closest_distance": 1567.0928498337296
     },
     "96": {
       "visited": false,
-      "closest_distance": 85.42833253669417
+      "closest_distance": 708.114397537573
     },
     "97": {
       "visited": false,
-      "closest_distance": 59.53990258641679
+      "closest_distance": 765.7969704823857
     },
     "98": {
       "visited": false,
-      "closest_distance": 175.03428235634297
+      "closest_distance": 629.1740617666943
     },
     "99": {
       "visited": false,
-      "closest_distance": 85.0
+      "closest_distance": 689.4294742756506
     },
     "100": {
       "visited": false,
-      "closest_distance": 153.83432646844463
+      "closest_distance": 552.3051692678605
     }
   }
 }
