@@ -6,6 +6,7 @@ import argparse
 import math
 from pathlib import Path
 from dataclasses import dataclass
+from skimage.morphology import skeletonize
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -786,6 +787,81 @@ class RouteExtractor:
 
         # No distinctive colour found — fall back to the diff-based mask.
         return gray_diff, False
+    
+    def skeleton_endpoints(self, skel):
+        # Make our input nice, possibly necessary.
+        skel = skel.copy()
+        skel[skel!=0] = 1
+        skel = np.uint8(skel)
+
+        # Apply the convolution.
+        kernel = np.uint8([[1,  1, 1],
+                        [1, 10, 1],
+                        [1,  1, 1]])
+        src_depth = -1
+        filtered = cv2.filter2D(skel,src_depth,kernel)
+
+        # Look through to find the value of 11.
+        # This returns a mask of the endpoints, but if you
+        # just want the coordinates, you could simply
+        # return np.where(filtered==11)
+        out = np.zeros_like(skel)
+        out[np.where(filtered==11)] = 1
+        return out
+
+    
+    def _find_route_endpoints(self, final_mask, debug=True):
+        
+        # == Blurring
+        final_mask_blurred = cv2.GaussianBlur(final_mask, (5, 5), 0)
+
+        # Re-threshold (blur creates gray values, convert back to binary)
+        _, final_mask_binary = cv2.threshold(final_mask_blurred, 127, 255, cv2.THRESH_BINARY)
+
+
+        # == Dilation
+        kernel_dilate = np.ones((5, 5), np.uint8)  # 3x3 or 5x5
+        final_mask_dilated = cv2.dilate(final_mask_binary, kernel_dilate, iterations=3)
+
+        skeleton_mask = skeletonize(final_mask_dilated > 0)  # skimage expects boolean
+
+        if debug:
+            vis_pil = PILImage.fromarray(skeleton_mask)
+            vis_pil.show()
+        
+        # Detect skeleton endpoints using convolution method
+        endpoint_mask = self.skeleton_endpoints(np.uint8(skeleton_mask))
+        
+        # Extract endpoint coordinates
+        endpoint_coords_yx = np.column_stack(np.where(endpoint_mask > 0))
+        endpoint_list = [(int(p[1]), int(p[0])) for p in endpoint_coords_yx]  # Convert to (x, y)
+        
+        print(f"\n[Skeleton Endpoint Analysis]")
+        print(f"  Endpoints detected: {len(endpoint_list)}")
+        
+        
+        if debug:
+            # Create visualization: skeleton with endpoints marked in red
+            # Convert boolean skeleton to proper uint8 grayscale image
+            skeleton_uint8 = (skeleton_mask.astype(np.uint8)) * 255
+            vis_skeleton = cv2.cvtColor(skeleton_uint8, cv2.COLOR_GRAY2BGR)
+            
+            # Draw large circles at each endpoint for visibility
+            for endpoint_coord in endpoint_list:
+                x, y = endpoint_coord
+                # Draw filled red circle
+                cv2.circle(vis_skeleton, (x, y), radius=10, color=(0, 0, 255), thickness=-1)
+                # Draw white outline for contrast
+                cv2.circle(vis_skeleton, (x, y), radius=12, color=(255, 255, 255), thickness=2)
+            
+            # Display the visualization using PIL (more compatible)
+            print(f"  Displaying skeleton visualization (skeleton: white, endpoints: red)")
+            # Convert BGR to RGB for PIL
+            vis_skeleton_rgb = cv2.cvtColor(vis_skeleton, cv2.COLOR_BGR2RGB)
+            vis_pil = PILImage.fromarray(vis_skeleton_rgb)
+            vis_pil.show()
+
+      
 
     # ──────────────────────────────────────────────────────────────────
     # Main entry point
@@ -882,7 +958,7 @@ class RouteExtractor:
             final_mask=final_mask,
             alignment_method=alignment_method,
         )
-
+    
     def summary(self, alignment_method, connectivity, endpoints):
         # ── Summary ───────────────────────────────────────────────────
         print("\n" + "="*70)
@@ -1090,15 +1166,15 @@ class RouteExtractor:
             tolerance_px
         )
         
-        self.summary(results.alignment_method, results.connectivity, results.endpoints)
+        # self.summary(results.alignment_method, results.connectivity, results.endpoints)
 
-        self._create_visualization(results.aligned_route, 
-                                   results.final_mask, 
-                                   results.points,
-                                   results.endpoints, 
-                                   output_path, 
-                                   marker_size,
-                                   results.alignment_method)
+        # self._create_visualization(results.aligned_route, 
+        #                            results.final_mask, 
+        #                            results.points,
+        #                            results.endpoints, 
+        #                            output_path, 
+        #                            marker_size,
+        #                            results.alignment_method)
         
         return results
 
