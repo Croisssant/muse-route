@@ -446,14 +446,14 @@ class SpatialValidator:
             # Draw large green circle for START
             cv2.circle(img_cv, (sx, sy), radius=15, color=(0, 255, 0), thickness=-1)
             # Draw white outline
-            cv2.circle(img_cv, (sx, sy), radius=17, color=(255, 255, 255), thickness=2)
+            cv2.circle(img_cv, (sx, sy), radius=17, color=(128, 128, 128), thickness=2)
         
         if endpoints['end']:
             ex, ey = int(endpoints['end'][0]), int(endpoints['end'][1])
             # Draw large red circle for END
             cv2.circle(img_cv, (ex, ey), radius=15, color=(0, 0, 255), thickness=-1)
             # Draw white outline
-            cv2.circle(img_cv, (ex, ey), radius=17, color=(255, 255, 255), thickness=2)
+            cv2.circle(img_cv, (ex, ey), radius=17, color=(128, 128, 128), thickness=2)
         
         # Convert to PIL for drawing text and markers
         img = Image.fromarray(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))

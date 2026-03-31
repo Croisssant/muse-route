@@ -399,7 +399,7 @@ class RouteExtractor:
         return out
 
     
-    def _find_route_endpoints(self, final_mask, debug=True):
+    def _find_route_endpoints(self, final_mask, debug=False):
         result = {'start': None, 'end': None}
         
         # == Blurring
