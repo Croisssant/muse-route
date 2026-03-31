@@ -3,7 +3,7 @@ from route_extractor import RouteExtractor
 
 def main():
    museum_annotations = "./museum_layout_annotations.json"
-   route_image_path     = "./invalid_route.png"
+   route_image_path     = "./route_plan_final.png"
    original_image_path  = "./layout_entrance_exit.png"
 
    re = RouteExtractor(museum_annotations)

@@ -811,6 +811,7 @@ class RouteExtractor:
 
     
     def _find_route_endpoints(self, final_mask, debug=True):
+        result = {'start': None, 'end': None}
         
         # == Blurring
         final_mask_blurred = cv2.GaussianBlur(final_mask, (5, 5), 0)
@@ -839,6 +840,38 @@ class RouteExtractor:
         print(f"\n[Skeleton Endpoint Analysis]")
         print(f"  Endpoints detected: {len(endpoint_list)}")
         
+        # Select START: endpoint closest to entrance center
+        if endpoint_list and self.entrances and self.entrances[0]['shape'] == 'rectangle':
+            ec = self.entrances[0]['coordinates']
+            e_center = (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2)
+            
+            # Find closest endpoint to entrance
+            start_endpoint = min(endpoint_list, key=lambda ep: self._distance(ep, e_center))
+            result['start'] = start_endpoint
+            dist_to_entrance = self._distance(start_endpoint, e_center)
+            print(f"  ✅ START: {start_endpoint} (distance to entrance: {dist_to_entrance:.1f} px)")
+        else:
+            print(f"  ❌ No START: No endpoints or entrance not defined")
+        
+        # Select END: endpoint closest to exit center (excluding START)
+        if endpoint_list and self.exits and self.exits[0]['shape'] == 'rectangle':
+            xc = self.exits[0]['coordinates']
+            x_center = (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2)
+            
+            # Find closest endpoint to exit (exclude START if already assigned)
+            remaining_endpoints = [ep for ep in endpoint_list if ep != result['start']]
+            if remaining_endpoints:
+                end_endpoint = min(remaining_endpoints, key=lambda ep: self._distance(ep, x_center))
+                result['end'] = end_endpoint
+                dist_to_exit = self._distance(end_endpoint, x_center)
+                print(f"  ✅ END: {end_endpoint} (distance to exit: {dist_to_exit:.1f} px)")
+            elif endpoint_list and result['start']:
+                print(f"  ⚠️ Only 1 endpoint detected - using as both START and END")
+                result['end'] = result['start']
+            else:
+                print(f"  ❌ No END: No remaining endpoints")
+        else:
+            print(f"  ❌ No END: No endpoints or exit not defined")
         
         if debug:
             # Create visualization: skeleton with endpoints marked in red
@@ -860,6 +893,9 @@ class RouteExtractor:
             vis_skeleton_rgb = cv2.cvtColor(vis_skeleton, cv2.COLOR_BGR2RGB)
             vis_pil = PILImage.fromarray(vis_skeleton_rgb)
             vis_pil.show()
+
+
+        return result
 
       
 
@@ -948,7 +984,7 @@ class RouteExtractor:
             print("ERROR: No route points found!")
             return
         points    = [(int(p[1]), int(p[0])) for p in raw_pts]
-        endpoints = self._find_route_endpoints_by_boxes(points)
+        endpoints = self._find_route_endpoints(final_mask)
 
         return RouteExtractionResult(
             aligned_route=aligned_route,
@@ -1166,15 +1202,15 @@ class RouteExtractor:
             tolerance_px
         )
         
-        # self.summary(results.alignment_method, results.connectivity, results.endpoints)
+        self.summary(results.alignment_method, results.connectivity, results.endpoints)
 
-        # self._create_visualization(results.aligned_route, 
-        #                            results.final_mask, 
-        #                            results.points,
-        #                            results.endpoints, 
-        #                            output_path, 
-        #                            marker_size,
-        #                            results.alignment_method)
+        self._create_visualization(results.aligned_route, 
+                                   results.final_mask, 
+                                   results.points,
+                                   results.endpoints, 
+                                   output_path, 
+                                   marker_size,
+                                   results.alignment_method)
         
         return results
 
