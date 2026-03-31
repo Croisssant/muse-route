@@ -377,62 +377,112 @@ class RouteExtractor:
     # Endpoint detection
     # ──────────────────────────────────────────────────────────────────
 
-    def _point_in_rectangle(self, point, rect_coords):
-        px, py = point
-        x, y   = rect_coords['x'], rect_coords['y']
-        w, h   = rect_coords['width'], rect_coords['height']
-        return (x <= px <= x + w) and (y <= py <= y + h)
+    def skeleton_endpoints(self, skel):
+        # Make our input nice, possibly necessary.
+        skel = skel.copy()
+        skel[skel!=0] = 1
+        skel = np.uint8(skel)
 
-    def _find_route_endpoints_by_boxes(self, points):
-        print(f"\n[Finding Route Endpoints]")
-        print(f"  Total route pixels: {len(points)}")
+        # Apply the convolution.
+        kernel = np.uint8([[1,  1, 1],
+                        [1, 10, 1],
+                        [1,  1, 1]])
+        src_depth = -1
+        filtered = cv2.filter2D(skel,src_depth,kernel)
 
-        result = {'start': None, 'end': None,
-                  'start_candidates': [], 'end_candidates': []}
+        # Look through to find the value of 11.
+        # This returns a mask of the endpoints, but if you
+        # just want the coordinates, you could simply
+        # return np.where(filtered==11)
+        out = np.zeros_like(skel)
+        out[np.where(filtered==11)] = 1
+        return out
 
-        if not self.entrances:
-            print("  ⚠️  WARNING: No entrance annotations found!")
-            return result
+    
+    def _find_route_endpoints(self, final_mask, debug=True):
+        result = {'start': None, 'end': None}
+        
+        # == Blurring
+        final_mask_blurred = cv2.GaussianBlur(final_mask, (5, 5), 0)
 
-        entrance = self.entrances[0]
-        if entrance['shape'] != 'rectangle':
-            return result
+        # Re-threshold (blur creates gray values, convert back to binary)
+        _, final_mask_binary = cv2.threshold(final_mask_blurred, 127, 255, cv2.THRESH_BINARY)
 
-        ec = entrance['coordinates']
-        e_center = (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2)
-        e_pts = [p for p in points if self._point_in_rectangle(p, ec)]
-        print(f"\n  Entrance box: X=[{ec['x']:.0f}, {ec['x']+ec['width']:.0f}], "
-              f"Y=[{ec['y']:.0f}, {ec['y']+ec['height']:.0f}]")
-        print(f"  Route pixels in entrance box: {len(e_pts)}")
 
-        if e_pts:
-            result['start'] = min(e_pts, key=lambda p: self._distance(p, e_center))
-            result['start_candidates'] = e_pts
-            print(f"  ✅ START: {result['start']}")
+        # == Dilation
+        kernel_dilate = np.ones((5, 5), np.uint8)  # 3x3 or 5x5
+        final_mask_dilated = cv2.dilate(final_mask_binary, kernel_dilate, iterations=3)
+
+        skeleton_mask = skeletonize(final_mask_dilated > 0)  # skimage expects boolean
+
+        if debug:
+            vis_pil = PILImage.fromarray(skeleton_mask)
+            vis_pil.show()
+        
+        # Detect skeleton endpoints using convolution method
+        endpoint_mask = self.skeleton_endpoints(np.uint8(skeleton_mask))
+        
+        # Extract endpoint coordinates
+        endpoint_coords_yx = np.column_stack(np.where(endpoint_mask > 0))
+        endpoint_list = [(int(p[1]), int(p[0])) for p in endpoint_coords_yx]  # Convert to (x, y)
+        
+        print(f"\n[Skeleton Endpoint Analysis]")
+        print(f"  Endpoints detected: {len(endpoint_list)}")
+        
+        # Select START: endpoint closest to entrance center
+        if endpoint_list and self.entrances and self.entrances[0]['shape'] == 'rectangle':
+            ec = self.entrances[0]['coordinates']
+            e_center = (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2)
+            
+            # Find closest endpoint to entrance
+            start_endpoint = min(endpoint_list, key=lambda ep: self._distance(ep, e_center))
+            result['start'] = start_endpoint
+            dist_to_entrance = self._distance(start_endpoint, e_center)
+            print(f"  ✅ START: {start_endpoint} (distance to entrance: {dist_to_entrance:.1f} px)")
         else:
-            print(f"  ❌ No route pixels in entrance box")
-
-        if not self.exits:
-            print("  ⚠️  WARNING: No exit annotations found!")
-            return result
-
-        exit_ann = self.exits[0]
-        if exit_ann['shape'] != 'rectangle':
-            return result
-
-        xc = exit_ann['coordinates']
-        x_center = (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2)
-        x_pts = [p for p in points if self._point_in_rectangle(p, xc)]
-        print(f"\n  Exit box: X=[{xc['x']:.0f}, {xc['x']+xc['width']:.0f}], "
-              f"Y=[{xc['y']:.0f}, {xc['y']+xc['height']:.0f}]")
-        print(f"  Route pixels in exit box: {len(x_pts)}")
-
-        if x_pts:
-            result['end'] = min(x_pts, key=lambda p: self._distance(p, x_center))
-            result['end_candidates'] = x_pts
-            print(f"  ✅ END: {result['end']}")
+            print(f"  ❌ No START: No endpoints or entrance not defined")
+        
+        # Select END: endpoint closest to exit center (excluding START)
+        if endpoint_list and self.exits and self.exits[0]['shape'] == 'rectangle':
+            xc = self.exits[0]['coordinates']
+            x_center = (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2)
+            
+            # Find closest endpoint to exit (exclude START if already assigned)
+            remaining_endpoints = [ep for ep in endpoint_list if ep != result['start']]
+            if remaining_endpoints:
+                end_endpoint = min(remaining_endpoints, key=lambda ep: self._distance(ep, x_center))
+                result['end'] = end_endpoint
+                dist_to_exit = self._distance(end_endpoint, x_center)
+                print(f"  ✅ END: {end_endpoint} (distance to exit: {dist_to_exit:.1f} px)")
+            elif endpoint_list and result['start']:
+                print(f"  ⚠️ Only 1 endpoint detected - using as both START and END")
+                result['end'] = result['start']
+            else:
+                print(f"  ❌ No END: No remaining endpoints")
         else:
-            print(f"  ❌ No route pixels in exit box")
+            print(f"  ❌ No END: No endpoints or exit not defined")
+        
+        if debug:
+            # Create visualization: skeleton with endpoints marked in red
+            # Convert boolean skeleton to proper uint8 grayscale image
+            skeleton_uint8 = (skeleton_mask.astype(np.uint8)) * 255
+            vis_skeleton = cv2.cvtColor(skeleton_uint8, cv2.COLOR_GRAY2BGR)
+            
+            # Draw large circles at each endpoint for visibility
+            for endpoint_coord in endpoint_list:
+                x, y = endpoint_coord
+                # Draw filled red circle
+                cv2.circle(vis_skeleton, (x, y), radius=10, color=(0, 0, 255), thickness=-1)
+                # Draw white outline for contrast
+                cv2.circle(vis_skeleton, (x, y), radius=12, color=(255, 255, 255), thickness=2)
+            
+            # Display the visualization using PIL (more compatible)
+            print(f"  Displaying skeleton visualization (skeleton: white, endpoints: red)")
+            # Convert BGR to RGB for PIL
+            vis_skeleton_rgb = cv2.cvtColor(vis_skeleton, cv2.COLOR_BGR2RGB)
+            vis_pil = PILImage.fromarray(vis_skeleton_rgb)
+            vis_pil.show()
+
 
         return result
 
@@ -788,116 +838,6 @@ class RouteExtractor:
         # No distinctive colour found — fall back to the diff-based mask.
         return gray_diff, False
     
-    def skeleton_endpoints(self, skel):
-        # Make our input nice, possibly necessary.
-        skel = skel.copy()
-        skel[skel!=0] = 1
-        skel = np.uint8(skel)
-
-        # Apply the convolution.
-        kernel = np.uint8([[1,  1, 1],
-                        [1, 10, 1],
-                        [1,  1, 1]])
-        src_depth = -1
-        filtered = cv2.filter2D(skel,src_depth,kernel)
-
-        # Look through to find the value of 11.
-        # This returns a mask of the endpoints, but if you
-        # just want the coordinates, you could simply
-        # return np.where(filtered==11)
-        out = np.zeros_like(skel)
-        out[np.where(filtered==11)] = 1
-        return out
-
-    
-    def _find_route_endpoints(self, final_mask, debug=True):
-        result = {'start': None, 'end': None}
-        
-        # == Blurring
-        final_mask_blurred = cv2.GaussianBlur(final_mask, (5, 5), 0)
-
-        # Re-threshold (blur creates gray values, convert back to binary)
-        _, final_mask_binary = cv2.threshold(final_mask_blurred, 127, 255, cv2.THRESH_BINARY)
-
-
-        # == Dilation
-        kernel_dilate = np.ones((5, 5), np.uint8)  # 3x3 or 5x5
-        final_mask_dilated = cv2.dilate(final_mask_binary, kernel_dilate, iterations=3)
-
-        skeleton_mask = skeletonize(final_mask_dilated > 0)  # skimage expects boolean
-
-        if debug:
-            vis_pil = PILImage.fromarray(skeleton_mask)
-            vis_pil.show()
-        
-        # Detect skeleton endpoints using convolution method
-        endpoint_mask = self.skeleton_endpoints(np.uint8(skeleton_mask))
-        
-        # Extract endpoint coordinates
-        endpoint_coords_yx = np.column_stack(np.where(endpoint_mask > 0))
-        endpoint_list = [(int(p[1]), int(p[0])) for p in endpoint_coords_yx]  # Convert to (x, y)
-        
-        print(f"\n[Skeleton Endpoint Analysis]")
-        print(f"  Endpoints detected: {len(endpoint_list)}")
-        
-        # Select START: endpoint closest to entrance center
-        if endpoint_list and self.entrances and self.entrances[0]['shape'] == 'rectangle':
-            ec = self.entrances[0]['coordinates']
-            e_center = (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2)
-            
-            # Find closest endpoint to entrance
-            start_endpoint = min(endpoint_list, key=lambda ep: self._distance(ep, e_center))
-            result['start'] = start_endpoint
-            dist_to_entrance = self._distance(start_endpoint, e_center)
-            print(f"  ✅ START: {start_endpoint} (distance to entrance: {dist_to_entrance:.1f} px)")
-        else:
-            print(f"  ❌ No START: No endpoints or entrance not defined")
-        
-        # Select END: endpoint closest to exit center (excluding START)
-        if endpoint_list and self.exits and self.exits[0]['shape'] == 'rectangle':
-            xc = self.exits[0]['coordinates']
-            x_center = (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2)
-            
-            # Find closest endpoint to exit (exclude START if already assigned)
-            remaining_endpoints = [ep for ep in endpoint_list if ep != result['start']]
-            if remaining_endpoints:
-                end_endpoint = min(remaining_endpoints, key=lambda ep: self._distance(ep, x_center))
-                result['end'] = end_endpoint
-                dist_to_exit = self._distance(end_endpoint, x_center)
-                print(f"  ✅ END: {end_endpoint} (distance to exit: {dist_to_exit:.1f} px)")
-            elif endpoint_list and result['start']:
-                print(f"  ⚠️ Only 1 endpoint detected - using as both START and END")
-                result['end'] = result['start']
-            else:
-                print(f"  ❌ No END: No remaining endpoints")
-        else:
-            print(f"  ❌ No END: No endpoints or exit not defined")
-        
-        if debug:
-            # Create visualization: skeleton with endpoints marked in red
-            # Convert boolean skeleton to proper uint8 grayscale image
-            skeleton_uint8 = (skeleton_mask.astype(np.uint8)) * 255
-            vis_skeleton = cv2.cvtColor(skeleton_uint8, cv2.COLOR_GRAY2BGR)
-            
-            # Draw large circles at each endpoint for visibility
-            for endpoint_coord in endpoint_list:
-                x, y = endpoint_coord
-                # Draw filled red circle
-                cv2.circle(vis_skeleton, (x, y), radius=10, color=(0, 0, 255), thickness=-1)
-                # Draw white outline for contrast
-                cv2.circle(vis_skeleton, (x, y), radius=12, color=(255, 255, 255), thickness=2)
-            
-            # Display the visualization using PIL (more compatible)
-            print(f"  Displaying skeleton visualization (skeleton: white, endpoints: red)")
-            # Convert BGR to RGB for PIL
-            vis_skeleton_rgb = cv2.cvtColor(vis_skeleton, cv2.COLOR_BGR2RGB)
-            vis_pil = PILImage.fromarray(vis_skeleton_rgb)
-            vis_pil.show()
-
-
-        return result
-
-      
 
     # ──────────────────────────────────────────────────────────────────
     # Main entry point

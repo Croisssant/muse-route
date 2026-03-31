@@ -211,26 +211,53 @@ class SpatialValidator:
         # Get determined START/END from entrance/exit boxes
         endpoints = getattr(self, '_determined_endpoints', {'start': None, 'end': None})
         
-        # Validate START point (must be in an entrance box)
+        # Validate START point (must exist AND be in an entrance box)
         if endpoints['start'] is None:
             violations['entrance_violations'].append({
                 'point': None,
-                'reason': 'No route pixels found in entrance bounding box'
+                'reason': 'No START point detected'
             })
-            print(f"  ❌ No route pixels found in entrance bounding box")
+            print(f"  ❌ No START point detected")
         else:
-            print(f"  ✅ Route START found in entrance box: {endpoints['start']}")
+            # Check if START is actually inside entrance box
+            if self.entrances and self.entrances[0]['shape'] == 'rectangle':
+                ec = self.entrances[0]['coordinates']
+                if self.point_in_rectangle(endpoints['start'], ec):
+                    print(f"  ✅ START {endpoints['start']} is inside entrance box")
+                else:
+                    violations['entrance_violations'].append({
+                        'point': endpoints['start'],
+                        'reason': 'START point is outside entrance bounding box'
+                    })
+                    dist_to_entrance = self._distance(endpoints['start'], 
+                                                     (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2))
+                    print(f"  ❌ START {endpoints['start']} is outside entrance box (distance: {dist_to_entrance:.1f} px)")
+            else:
+                print(f"  ⚠️ No entrance box defined for validation")
         
-        # Validate END point (must be in exit box)
+        # Validate END point (must exist AND be in exit box)
         if endpoints['end'] is None:
-            exit_type = "exit" if self.exits else "entrance (no exit defined)"
             violations['exit_violations'].append({
                 'point': None,
-                'reason': f'No route pixels found in {exit_type} bounding box'
+                'reason': f'No END point detected'
             })
-            print(f"  ❌ No route pixels found in {exit_type} bounding box")
+            print(f"  ❌ No END point detected")
         else:
-            print(f"  ✅ Route END found in exit box: {endpoints['end']}")
+            # Check if END is actually inside exit box
+            if self.exits and self.exits[0]['shape'] == 'rectangle':
+                xc = self.exits[0]['coordinates']
+                if self.point_in_rectangle(endpoints['end'], xc):
+                    print(f"  ✅ END {endpoints['end']} is inside exit box")
+                else:
+                    violations['exit_violations'].append({
+                        'point': endpoints['end'],
+                        'reason': 'END point is outside exit bounding box'
+                    })
+                    dist_to_exit = self._distance(endpoints['end'], 
+                                                  (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2))
+                    print(f"  ❌ END {endpoints['end']} is outside exit box (distance: {dist_to_exit:.1f} px)")
+            else:
+                print(f"  ⚠️ No exit box defined for validation")
         
         # Validate each point in the route
         for i, point in enumerate(route_points):
@@ -411,6 +438,23 @@ class SpatialValidator:
         else:
             print(f"  ⚠️ WARNING: No route points available, skipping route visualization")
         
+        # Draw START and END point markers if available
+        endpoints = getattr(self, '_determined_endpoints', {'start': None, 'end': None})
+        
+        if endpoints['start']:
+            sx, sy = int(endpoints['start'][0]), int(endpoints['start'][1])
+            # Draw large green circle for START
+            cv2.circle(img_cv, (sx, sy), radius=15, color=(0, 255, 0), thickness=-1)
+            # Draw white outline
+            cv2.circle(img_cv, (sx, sy), radius=17, color=(255, 255, 255), thickness=2)
+        
+        if endpoints['end']:
+            ex, ey = int(endpoints['end'][0]), int(endpoints['end'][1])
+            # Draw large red circle for END
+            cv2.circle(img_cv, (ex, ey), radius=15, color=(0, 0, 255), thickness=-1)
+            # Draw white outline
+            cv2.circle(img_cv, (ex, ey), radius=17, color=(255, 255, 255), thickness=2)
+        
         # Convert to PIL for drawing text and markers
         img = Image.fromarray(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(img)
@@ -422,6 +466,15 @@ class SpatialValidator:
         except:
             font = ImageFont.load_default()
             font_small = ImageFont.load_default()
+        
+        # Add labels for START and END
+        if endpoints['start']:
+            sx, sy = int(endpoints['start'][0]), int(endpoints['start'][1])
+            draw.text((sx + 20, sy - 10), "START", fill=(0, 255, 0), font=font)
+        
+        if endpoints['end']:
+            ex, ey = int(endpoints['end'][0]), int(endpoints['end'][1])
+            draw.text((ex + 20, ey - 10), "END", fill=(255, 0, 0), font=font)
         
         # Draw visit zones (proximity threshold circles) around all exhibits FIRST
         print(f"  Drawing visit zones (radius + {self.proximity_threshold}px) around exhibits...")
