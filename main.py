@@ -16,13 +16,22 @@ def main():
         # tolerance_px         = args.tolerance,
    )
    
+
+   print("\n" + "="*70)
+   print("Spatial Constraint Validation")
+   print("="*70)
+
+
    validator = SpatialValidator(museum_annotations)
-   validation_result = validator.validate_route(route_extraction_results.points)
+   validation_result = validator.validate_route(
+        route_points=route_extraction_results.points,
+        endpoints=route_extraction_results.endpoints
+   )
    validator.visualize_validation(
         original_image_path=original_image_path,
         route_points=route_extraction_results.points,
         validation_result=validation_result,
-        output_path='main-test.png'
+        # output_path='main-test.png'
     )
 
     

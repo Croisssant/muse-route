@@ -154,7 +154,7 @@ class SpatialValidator:
         
         return (x <= px <= x + width) and (y <= py <= y + height)
     
-    def validate_route(self, route_points):
+    def validate_route(self, route_points, endpoints=None):
         """
         Validate route against walls, exhibits, floor areas, entrance/exit.
         
@@ -167,11 +167,16 @@ class SpatialValidator:
         
         Args:
             route_points: List of (x, y) tuples
+            endpoints: Optional dict with 'start' and 'end' points from route extraction
         
         Returns:
             Dictionary with validation results
         """
         print("\nValidating route...")
+        
+        # Set route data if provided (from RouteExtractor)
+        if endpoints is not None:
+            self._determined_endpoints = endpoints
         
         violations = {
             'wall_crossings': [],
@@ -313,7 +318,7 @@ class SpatialValidator:
         
         return result
     
-    def visualize_validation(self, original_image_path, route_points, validation_result, output_path):
+    def visualize_validation(self, original_image_path, route_points, validation_result, output_path=None):
         """
         Create annotated image showing validation results.
         
@@ -325,7 +330,7 @@ class SpatialValidator:
         """
         print(f"\nCreating validation visualization...")
         
-        # Load image with OpenCV to draw skeleton pixels
+        # Load image with OpenCV to draw route pixels
         img_cv = cv2.imread(str(original_image_path))
         if img_cv is None:
             # Fallback to PIL
@@ -336,17 +341,75 @@ class SpatialValidator:
             img_cv = np.array(img_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
         
-        # Get skeleton and draw it properly
-        skeleton = getattr(self, '_route_skeleton', None)
-        is_valid = validation_result['validation_summary']['is_valid']
+        # Create violation lookup for each route point
+        violations = validation_result['violations']
+        point_violations = {}  # Maps point index to list of violation types
         
-        if skeleton is not None:
-            # Draw actual skeleton pixels in green if valid, orange if invalid
-            route_color_bgr = (0, 255, 0) if is_valid else (0, 150, 255)  # Green or Orange in BGR
-            img_cv[skeleton > 0] = route_color_bgr
-            print(f"  Drew {cv2.countNonZero(skeleton)} skeleton pixels")
+        # Index wall crossings
+        for violation in violations['wall_crossings']:
+            idx = violation['index']
+            if idx not in point_violations:
+                point_violations[idx] = []
+            point_violations[idx].append('wall')
+        
+        # Index exhibit collisions
+        for violation in violations['exhibit_collisions']:
+            idx = violation['index']
+            if idx not in point_violations:
+                point_violations[idx] = []
+            point_violations[idx].append('exhibit')
+        
+        # Index floor area violations
+        for violation in violations['floor_area_violations']:
+            idx = violation['index']
+            if idx not in point_violations:
+                point_violations[idx] = []
+            point_violations[idx].append('floor_area')
+        
+        # Draw route points with color-coded violations
+        if route_points and len(route_points) > 0:
+            violation_counts = {'wall': 0, 'exhibit': 0, 'floor_area': 0, 'valid': 0}
+            
+            for i, point in enumerate(route_points):
+                x, y = int(point[0]), int(point[1])
+                
+                # Bounds check
+                if not (0 <= x < img_cv.shape[1] and 0 <= y < img_cv.shape[0]):
+                    continue
+                
+                # Determine color based on violations
+                if i in point_violations:
+                    violation_types = point_violations[i]
+                    
+                    # Priority: wall > exhibit > floor_area
+                    if 'wall' in violation_types:
+                        color = (0, 0, 255)  # Red for wall crossings
+                        violation_counts['wall'] += 1
+                    elif 'exhibit' in violation_types:
+                        color = (255, 0, 255)  # Magenta for exhibit collisions
+                        violation_counts['exhibit'] += 1
+                    elif 'floor_area' in violation_types:
+                        color = (0, 165, 255)  # Orange for floor area violations
+                        violation_counts['floor_area'] += 1
+                    else:
+                        color = (0, 255, 0)  # Green (shouldn't happen)
+                        violation_counts['valid'] += 1
+                else:
+                    # No violations - green
+                    color = (0, 255, 0)  # Green in BGR
+                    violation_counts['valid'] += 1
+                
+                # Draw point with determined color
+                cv2.circle(img_cv, (x, y), radius=1, color=color, thickness=-1)
+            
+            total = len(route_points)
+            print(f"  Drew {total} route points:")
+            print(f"    - {violation_counts['valid']}/{total} valid points ({100*violation_counts['valid']/total:.1f}%) [green]")
+            print(f"    - {violation_counts['wall']}/{total} wall crossings ({100*violation_counts['wall']/total:.1f}%) [red]")
+            print(f"    - {violation_counts['exhibit']}/{total} exhibit collisions ({100*violation_counts['exhibit']/total:.1f}%) [magenta]")
+            print(f"    - {violation_counts['floor_area']}/{total} floor area violations ({100*violation_counts['floor_area']/total:.1f}%) [orange]")
         else:
-            print(f"  ⚠️ WARNING: No skeleton available, skipping route visualization")
+            print(f"  ⚠️ WARNING: No route points available, skipping route visualization")
         
         # Convert to PIL for drawing text and markers
         img = Image.fromarray(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
@@ -384,24 +447,6 @@ class SpatialValidator:
                                 center[0]+visit_zone_radius, center[1]+visit_zone_radius],
                                outline=(150, 150, 150), width=1)  # Gray outline
         
-        # Mark violations
-        violations = validation_result['violations']
-        
-        # Out of bounds points
-        for violation in violations['out_of_bounds']:
-            point = tuple(violation['point'])
-            draw.ellipse([point[0]-5, point[1]-5, point[0]+5, point[1]+5], 
-                        fill=(255, 0, 0), outline=(0, 0, 0), width=2)
-            draw.text((point[0]+8, point[1]-8), "OUT", fill=(255, 0, 0), font=font_small)
-        
-        # Exhibit collisions
-        for violation in violations['exhibit_collisions']:
-            point = tuple(violation['point'])
-            draw.ellipse([point[0]-7, point[1]-7, point[0]+7, point[1]+7], 
-                        fill=(255, 0, 255), outline=(0, 0, 0), width=2)
-            draw.text((point[0]+10, point[1]-10), f"HIT {violation['exhibit_id']}", 
-                     fill=(255, 0, 255), font=font_small)
-        
         # Highlight visited exhibits
         for exhibit in self.exhibits:
             if exhibit['shape'] == 'circle':
@@ -418,9 +463,10 @@ class SpatialValidator:
                     draw.text((center[0]+radius+10, center[1]), f"✓ {exhibit_id}", 
                              fill=(0, 200, 0), font=font)
         
-        # Add legend
+        # Add legend with color-coded route explanations
         legend_x, legend_y = 20, 20
-        legend_bg = [(legend_x-10, legend_y-10), (legend_x+280, legend_y+120)]
+        is_valid = validation_result['validation_summary']['is_valid']
+        legend_bg = [(legend_x-10, legend_y-10), (legend_x+300, legend_y+160)]
         draw.rectangle(legend_bg, fill=(255, 255, 255, 230), outline=(0, 0, 0), width=2)
         
         status = "VALID ✅" if is_valid else "INVALID ❌"
@@ -430,67 +476,31 @@ class SpatialValidator:
         draw.text((legend_x, legend_y+45), f"Exhibits Visited: {len(validation_result['validation_summary']['exhibits_visited'])}/{len(self.exhibits)}", 
                  fill=(0, 0, 0), font=font_small)
         
-        # Legend symbols
-        draw.ellipse([legend_x, legend_y+65, legend_x+10, legend_y+75], outline=(200, 200, 0), width=2)
-        draw.text((legend_x+15, legend_y+65), "= Visit zone (visited)", fill=(0, 0, 0), font=font_small)
-        draw.ellipse([legend_x, legend_y+85, legend_x+10, legend_y+95], outline=(150, 150, 150), width=1)
-        draw.text((legend_x+15, legend_y+85), "= Visit zone (not visited)", fill=(0, 0, 0), font=font_small)
-        draw.ellipse([legend_x, legend_y+105, legend_x+10, legend_y+115], fill=(255, 0, 0))
-        draw.text((legend_x+15, legend_y+105), "= Out of Bounds", fill=(0, 0, 0), font=font_small)
+        # Route color legend
+        y_offset = legend_y + 70
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(0, 255, 0))
+        draw.text((legend_x+15, y_offset), "= Valid route point", fill=(0, 0, 0), font=font_small)
+        
+        y_offset += 20
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(255, 0, 0))
+        draw.text((legend_x+15, y_offset), "= Wall crossing", fill=(0, 0, 0), font=font_small)
+        
+        y_offset += 20
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(255, 0, 255))
+        draw.text((legend_x+15, y_offset), "= Exhibit collision", fill=(0, 0, 0), font=font_small)
+        
+        y_offset += 20
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(255, 165, 0))
+        draw.text((legend_x+15, y_offset), "= Floor area violation", fill=(0, 0, 0), font=font_small)
+        
+        y_offset += 20
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], outline=(200, 200, 0), width=2)
+        draw.text((legend_x+15, y_offset), "= Exhibit visited", fill=(0, 0, 0), font=font_small)
         
         # Save
-        img.save(output_path)
-        print(f"Validation visualization saved to: {output_path}")
+        if output_path:
+            img.save(output_path)
+            print(f"Validation visualization saved to: {output_path}")
 
-
-
-
-
-def segments_intersect(self, p1, p2, p3, p4):
-    """
-    Check if segment p1→p2 intersects segment p3→p4.
-    Uses cross-product orientation test.
-    """
-    def cross(o, a, b):
-        return (a[0]-o[0]) * (b[1]-o[1]) - (a[1]-o[1]) * (b[0]-o[0])
-
-    d1 = cross(p3, p4, p1)
-    d2 = cross(p3, p4, p2)
-    d3 = cross(p1, p2, p3)
-    d4 = cross(p1, p2, p4)
-
-    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
-       ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
-        return True
-
-    # Collinear cases
-    if d1 == 0 and self._point_on_segment(p1, p3, p4): return True
-    if d2 == 0 and self._point_on_segment(p2, p3, p4): return True
-    if d3 == 0 and self._point_on_segment(p3, p1, p2): return True
-    if d4 == 0 and self._point_on_segment(p4, p1, p2): return True
-
-    return False
-
-def route_crosses_walls(self, skeleton_points):
-    """
-    Returns a list of (skeleton_pt, wall_id) pairs where the route
-    crosses a wall segment.
-    """
-    violations = []
-    # Build wall segments from all polylines
-    wall_segments = []
-    for wall in self.walls:
-        if wall['shape'] == 'polyline':
-            pts = [(p['x'], p['y']) for p in wall['coordinates']['points']]
-            for i in range(len(pts) - 1):
-                wall_segments.append((wall['id'], pts[i], pts[i+1]))
-
-    # Check each consecutive pair of skeleton points against every wall segment
-    for i in range(len(skeleton_points) - 1):
-        s1, s2 = skeleton_points[i], skeleton_points[i+1]
-        for wall_id, w1, w2 in wall_segments:
-            if self.segments_intersect(s1, s2, w1, w2):
-                violations.append((s1, wall_id))
-                break  # one violation per skeleton segment is enough
-
-    return violations
+        else:
+            img.show()
