@@ -34,15 +34,34 @@ class SpatialValidator:
         self.entrances = self.annotations.get('entrances', [])
         self.exits = self.annotations.get('exits', [])
         self.floor_areas = self.annotations.get('floor_areas', [])
+        self.galleries = self.annotations.get('galleries', [])
+        self.forbidden_areas = self.annotations.get('forbidden_areas', [])
+        
+        # Gallery configurations (can be set from main.py)
+        self.gallery_configs = {}
         
         # Calculate museum bounds from annotations
         self.museum_bounds = self._calculate_museum_bounds()
         
         print(f"Loaded {len(self.walls)} wall(s) and {len(self.exhibits)} exhibit(s)")
         print(f"Loaded {len(self.entrances)} entrance(s), {len(self.exits)} exit(s), and {len(self.floor_areas)} floor area(s)")
+        print(f"Loaded {len(self.galleries)} gallery/galleries and {len(self.forbidden_areas)} forbidden area(s)")
         if self.museum_bounds:
             print(f"Museum bounds: X=[{self.museum_bounds['min_x']}, {self.museum_bounds['max_x']}], "
                   f"Y=[{self.museum_bounds['min_y']}, {self.museum_bounds['max_y']}]")
+    
+    def set_gallery_configurations(self, gallery_configs):
+        """
+        Set gallery access configurations.
+        
+        Args:
+            gallery_configs: Dict mapping gallery_name to type ('must_see', 'restricted', 'normal')
+                           Example: {'gallery_room_1': 'must_see', 'gallery_open_space_1': 'normal'}
+        """
+        self.gallery_configs = gallery_configs
+        print(f"\nGallery configurations set:")
+        for gallery_name, config_type in gallery_configs.items():
+            print(f"  - {gallery_name}: {config_type}")
     
     def _calculate_museum_bounds(self):
         """Calculate bounding box from all annotations."""
@@ -184,7 +203,10 @@ class SpatialValidator:
             'out_of_bounds': [],
             'floor_area_violations': [],
             'entrance_violations': [],
-            'exit_violations': []
+            'exit_violations': [],
+            'forbidden_area_violations': [],
+            'gallery_violations': [],
+            'must_see_gallery_violations': [],
         }
         
         exhibit_visits = {}
@@ -194,6 +216,12 @@ class SpatialValidator:
                 'visited': False,
                 'closest_distance': float('inf')
             }
+        
+        # Track gallery visits for validation
+        gallery_visits = {}
+        for gallery in self.galleries:
+            gallery_name = gallery.get('gallery_name', gallery.get('id', 'unknown'))
+            gallery_visits[gallery_name] = False
         
         # Get all wall polygons (not just the first one - check ALL walls)
         wall_polygons = []
@@ -315,6 +343,47 @@ class SpatialValidator:
                     # Check visit (within proximity threshold)
                     elif dist < radius + self.proximity_threshold:
                         exhibit_visits[exhibit_id]['visited'] = True
+            
+            # Check if route passes through forbidden areas
+            for forbidden_area in self.forbidden_areas:
+                if forbidden_area['shape'] == 'rectangle':
+                    if self.point_in_rectangle(point, forbidden_area['coordinates']):
+                        violations['forbidden_area_violations'].append({
+                            'point': [int(point[0]), int(point[1])],
+                            'index': int(i),
+                            'reason': 'route passes through forbidden area'
+                        })
+                        break  # Only report once per point
+            
+            # Check gallery violations based on configuration
+            for gallery in self.galleries:
+                if gallery['shape'] == 'rectangle':
+                    gallery_name = gallery.get('gallery_name', gallery.get('id', 'unknown'))
+                    gallery_type = self.gallery_configs.get(gallery_name, 'normal')
+                    
+                    if self.point_in_rectangle(point, gallery['coordinates']):
+                        # Mark gallery as visited
+                        gallery_visits[gallery_name] = True
+                        
+                        # Violation if gallery is restricted
+                        if gallery_type == 'restricted':
+                            violations['gallery_violations'].append({
+                                'gallery_name': gallery_name,
+                                'point': [int(point[0]), int(point[1])],
+                                'index': int(i),
+                                'reason': f'route enters restricted gallery "{gallery_name}"'
+                            })
+                            break  # Only report once per point
+        
+        # Check if must_see galleries were visited
+        for gallery_name, gallery_type in self.gallery_configs.items():
+            if gallery_type == 'must_see' and not gallery_visits.get(gallery_name, False):
+                violations['must_see_gallery_violations'].append({
+                    'gallery_name': gallery_name,
+                    'point': None,
+                    'index': None,
+                    'reason': f'route did not visit must-see gallery "{gallery_name}"'
+                })
         
         # Compile results
         visited_exhibits = [eid for eid, data in exhibit_visits.items() if data['visited']]
@@ -324,24 +393,36 @@ class SpatialValidator:
                           len(violations['out_of_bounds']) +
                           len(violations['floor_area_violations']) +
                           len(violations['entrance_violations']) +
-                          len(violations['exit_violations']))
+                          len(violations['exit_violations']) +
+                          len(violations['forbidden_area_violations']) +
+                          len(violations['gallery_violations']) +
+                          len(violations['must_see_gallery_violations']))
         
         is_valid = total_violations == 0
         
+        print(f"\nValidation Result: {'✅ VALID' if is_valid else '❌ INVALID'}")
+        print(f"Exhibits visited: {len(visited_exhibits)}/{len(self.exhibits)}")
+        print(f"Total violations: {total_violations}")
+        violation_reasons = []
+        for key, value in violations.items():
+            num_violations = len(value)
+            if num_violations > 0:
+                print(f"  - {key}: {num_violations}")
+                violation_reasons.append(key)
+
+
         result = {
             'validation_summary': {
                 'is_valid': is_valid,
                 'total_violations': total_violations,
-                'route_length_pixels': len(route_points),
-                'exhibits_visited': visited_exhibits
+                'violation_reasons': violation_reasons,
+                'num_route_pixels': len(route_points),
+                'exhibits_visited': visited_exhibits,
+                'gallery_visits': gallery_visits,
             },
             'violations': violations,
-            'exhibit_visits': exhibit_visits
+            'exhibit_visits': exhibit_visits,
         }
-        
-        print(f"\nValidation Result: {'✅ VALID' if is_valid else '❌ INVALID'}")
-        print(f"Total violations: {total_violations}")
-        print(f"Exhibits visited: {len(visited_exhibits)}/{len(self.exhibits)}")
         
         return result
     
@@ -393,9 +474,24 @@ class SpatialValidator:
                 point_violations[idx] = []
             point_violations[idx].append('floor_area')
         
+        # Index forbidden area violations
+        for violation in violations['forbidden_area_violations']:
+            idx = violation['index']
+            if idx not in point_violations:
+                point_violations[idx] = []
+            point_violations[idx].append('forbidden_area')
+        
+        # Index gallery violations (only those with specific point index)
+        for violation in violations['gallery_violations']:
+            if violation['index'] is not None:
+                idx = violation['index']
+                if idx not in point_violations:
+                    point_violations[idx] = []
+                point_violations[idx].append('gallery')
+        
         # Draw route points with color-coded violations
         if route_points and len(route_points) > 0:
-            violation_counts = {'wall': 0, 'exhibit': 0, 'floor_area': 0, 'valid': 0}
+            violation_counts = {'wall': 0, 'exhibit': 0, 'floor_area': 0, 'forbidden_area': 0, 'gallery': 0, 'valid': 0}
             
             for i, point in enumerate(route_points):
                 x, y = int(point[0]), int(point[1])
@@ -408,10 +504,16 @@ class SpatialValidator:
                 if i in point_violations:
                     violation_types = point_violations[i]
                     
-                    # Priority: wall > exhibit > floor_area
+                    # Priority: wall > forbidden_area > gallery > exhibit > floor_area
                     if 'wall' in violation_types:
                         color = (0, 0, 255)  # Red for wall crossings
                         violation_counts['wall'] += 1
+                    elif 'forbidden_area' in violation_types:
+                        color = (0, 100, 255)  # Dark orange for forbidden areas
+                        violation_counts['forbidden_area'] += 1
+                    elif 'gallery' in violation_types:
+                        color = (128, 0, 128)  # Purple for gallery violations
+                        violation_counts['gallery'] += 1
                     elif 'exhibit' in violation_types:
                         color = (255, 0, 255)  # Magenta for exhibit collisions
                         violation_counts['exhibit'] += 1
@@ -431,10 +533,12 @@ class SpatialValidator:
             
             total = len(route_points)
             print(f"  Drew {total} route points:")
-            print(f"    - {violation_counts['valid']}/{total} valid points ({100*violation_counts['valid']/total:.1f}%) [green]")
-            print(f"    - {violation_counts['wall']}/{total} wall crossings ({100*violation_counts['wall']/total:.1f}%) [red]")
-            print(f"    - {violation_counts['exhibit']}/{total} exhibit collisions ({100*violation_counts['exhibit']/total:.1f}%) [magenta]")
-            print(f"    - {violation_counts['floor_area']}/{total} floor area violations ({100*violation_counts['floor_area']/total:.1f}%) [orange]")
+            print(f"    - {violation_counts['valid']} valid points ({100*violation_counts['valid']/total:.1f}%) [green]")
+            print(f"    - {violation_counts['wall']} wall crossings ({100*violation_counts['wall']/total:.1f}%) [red]")
+            print(f"    - {violation_counts['forbidden_area']} forbidden area violations ({100*violation_counts['forbidden_area']/total:.1f}%) [dark orange]")
+            print(f"    - {violation_counts['gallery']} gallery violations ({100*violation_counts['gallery']/total:.1f}%) [purple]")
+            print(f"    - {violation_counts['exhibit']} exhibit collisions ({100*violation_counts['exhibit']/total:.1f}%) [magenta]")
+            print(f"    - {violation_counts['floor_area']} floor area violations ({100*violation_counts['floor_area']/total:.1f}%) [orange]")
         else:
             print(f"  ⚠️ WARNING: No route points available, skipping route visualization")
         
@@ -519,7 +623,7 @@ class SpatialValidator:
         # Add legend with color-coded route explanations
         legend_x, legend_y = 20, 20
         is_valid = validation_result['validation_summary']['is_valid']
-        legend_bg = [(legend_x-10, legend_y-10), (legend_x+300, legend_y+160)]
+        legend_bg = [(legend_x-10, legend_y-10), (legend_x+300, legend_y+200)]
         draw.rectangle(legend_bg, fill=(255, 255, 255, 230), outline=(0, 0, 0), width=2)
         
         status = "VALID ✅" if is_valid else "INVALID ❌"
@@ -537,6 +641,14 @@ class SpatialValidator:
         y_offset += 20
         draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(255, 0, 0))
         draw.text((legend_x+15, y_offset), "= Wall crossing", fill=(0, 0, 0), font=font_small)
+        
+        y_offset += 20
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(255, 100, 0))
+        draw.text((legend_x+15, y_offset), "= Forbidden area", fill=(0, 0, 0), font=font_small)
+        
+        y_offset += 20
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(128, 0, 128))
+        draw.text((legend_x+15, y_offset), "= Gallery violation", fill=(0, 0, 0), font=font_small)
         
         y_offset += 20
         draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(255, 0, 255))
@@ -557,3 +669,5 @@ class SpatialValidator:
 
         else:
             img.show()
+        
+        return violation_counts

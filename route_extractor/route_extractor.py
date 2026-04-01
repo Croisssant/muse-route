@@ -433,7 +433,7 @@ class RouteExtractor:
 
         return skel
 
-    def _find_route_endpoints(self, final_mask, debug=True, prune_iter=10):
+    def _find_route_endpoints(self, final_mask, debug=False, prune_iter=10):
         result = {'start': None, 'end': None}
         
         # == Blurring
@@ -885,7 +885,7 @@ class RouteExtractor:
     # Main entry point
     # ──────────────────────────────────────────────────────────────────
 
-    def determine_route(self, route_image_path, original_image_path, difference_threshold=10, tolerance_px=3):
+    def determine_route(self, route_image_path, original_image_path, difference_threshold=10, tolerance_px=3, debug=False):
         print("\n" + "="*70)
         print("ROUTE DETERMINATION")
         print("="*70)
@@ -966,7 +966,7 @@ class RouteExtractor:
             print("ERROR: No route points found!")
             return
         points    = [(int(p[1]), int(p[0])) for p in raw_pts]
-        endpoints = self._find_route_endpoints(final_mask)
+        endpoints = self._find_route_endpoints(final_mask, debug)
 
         return RouteExtractionResult(
             aligned_route=aligned_route,
@@ -1175,13 +1175,14 @@ class RouteExtractor:
         else:
             pil.show()
 
-    def process_pipeline(self, route_image_path, original_image_path, output_path=None, marker_size=10, difference_threshold=10, tolerance_px=3):
+    def process_pipeline(self, route_image_path, original_image_path, output_path=None, marker_size=10, difference_threshold=10, tolerance_px=3, debug=False):
 
         results = self.determine_route(
             route_image_path, 
             original_image_path,
             difference_threshold,
-            tolerance_px
+            tolerance_px,
+            debug
         )
         
         self.summary(results.alignment_method, results.connectivity, results.endpoints)
@@ -1223,6 +1224,7 @@ Example:
                              '(default: 3; increase to 5-8 for larger dimension gaps)')
     parser.add_argument('--output',               default='route_endpoints.png')
     parser.add_argument('--marker-size',          type=int, default=15)
+    parser.add_argument('--debug', action='store_true', help='Enable debugging displays (disabled by default)')
 
     args = parser.parse_args()
     route_extractor  = RouteExtractor(args.annotations)
@@ -1233,6 +1235,7 @@ Example:
         marker_size          = args.marker_size,
         difference_threshold = args.difference_threshold,
         tolerance_px         = args.tolerance,
+        debug                = args.debug
     )
   
 
