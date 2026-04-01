@@ -1,7 +1,7 @@
 """
 Convert VIA project JSON to museum layout annotation format
 Filters out unlabeled annotations and converts to format compatible with validate_route.py
-Supports: walls, rooms, exhibits, entrances, exits, and floor_areas
+Supports: walls, galleries, exhibits, entrances, exits, floor_areas, and forbidden_areas
 """
 
 import json
@@ -30,6 +30,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
     entrances = []
     exits = []
     floor_areas = []
+    forbidden_areas = []
     other = []
     
     # Track statistics
@@ -172,6 +173,10 @@ def convert_via_to_museum_layout(via_json_path, output_path):
                 rectangle_data['annotation_number'] = len(floor_areas) + 1
                 floor_areas.append(rectangle_data)
                 print(f"✓ Floor Area: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
+            elif entity_type == '6':  # Forbidden Area
+                rectangle_data['annotation_number'] = len(forbidden_areas) + 1
+                forbidden_areas.append(rectangle_data)
+                print(f"✓ Forbidden Area: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
             else:
                 other.append(rectangle_data)
                 print(f"✓ Other rectangle: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
@@ -192,6 +197,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
                 'entrances': len(entrances),
                 'exits': len(exits),
                 'floor_areas': len(floor_areas),
+                'forbidden_areas': len(forbidden_areas),
                 'other': len(other)
             }
         },
@@ -201,6 +207,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
         'entrances': entrances,
         'exits': exits,
         'floor_areas': floor_areas,
+        'forbidden_areas': forbidden_areas,
         'other': other
     }
     
@@ -217,13 +224,14 @@ def convert_via_to_museum_layout(via_json_path, output_path):
     print(f"  ❌ Unlabeled (removed): {unlabeled_count}")
     print()
     print("Converted annotations:")
-    print(f"  Walls:       {len(walls)}")
-    print(f"  Galleries:   {len(galleries)}")
-    print(f"  Exhibits:    {len(exhibits)}")
-    print(f"  Entrances:   {len(entrances)}")
-    print(f"  Exits:       {len(exits)}")
-    print(f"  Floor Areas: {len(floor_areas)}")
-    print(f"  Other:       {len(other)}")
+    print(f"  Walls:           {len(walls)}")
+    print(f"  Galleries:       {len(galleries)}")
+    print(f"  Exhibits:        {len(exhibits)}")
+    print(f"  Entrances:       {len(entrances)}")
+    print(f"  Exits:           {len(exits)}")
+    print(f"  Floor Areas:     {len(floor_areas)}")
+    print(f"  Forbidden Areas: {len(forbidden_areas)}")
+    print(f"  Other:           {len(other)}")
     print()
     print(f"✅ Saved to: {output_path}")
     print("\nThis file is compatible with validate_route.py --annotations")

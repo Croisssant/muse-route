@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "total_annotations": 109,
-    "export_date": "2026-03-25T17:40:16.163129",
+    "total_annotations": 113,
+    "export_date": "2026-04-01T13:49:54.192206",
     "attributes": {
       "1": {
         "aname": "Entity",
@@ -10,11 +10,12 @@
         "desc": "",
         "options": {
           "0": "wall",
-          "1": "room",
+          "1": "gallery",
           "2": "exhibit",
           "3": "entrance",
           "4": "exit",
-          "5": "floor_area"
+          "5": "floor_area",
+          "6": "forbidden_area"
         },
         "default_option_id": ""
       },
@@ -25,15 +26,24 @@
         "desc": "",
         "options": {},
         "default_option_id": ""
+      },
+      "3": {
+        "aname": "Gallery",
+        "anchor_id": "FILE1_Z0_XY1",
+        "type": 1,
+        "desc": "",
+        "options": {},
+        "default_option_id": ""
       }
     },
     "counts": {
       "walls": 6,
-      "rooms": 0,
+      "galleries": 2,
       "exhibits": 100,
       "entrances": 1,
       "exits": 1,
       "floor_areas": 1,
+      "forbidden_areas": 2,
       "other": 0
     }
   },
@@ -897,7 +907,34 @@
       "area": null
     }
   ],
-  "rooms": [],
+  "galleries": [
+    {
+      "id": "1_yOlxLB9K",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 1403.59,
+        "y": 301.78,
+        "width": 326.41,
+        "height": 461.22
+      },
+      "area": 150548,
+      "gallery_name": "gallery_room_1"
+    },
+    {
+      "id": "1_f5DjcU04",
+      "annotation_number": 2,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 1277,
+        "y": 1038,
+        "width": 194,
+        "height": 359
+      },
+      "area": 69646,
+      "gallery_name": "gallery_open_space_1"
+    }
+  ],
   "exhibits": [
     {
       "id": "1_ajktuRJu",
@@ -2834,12 +2871,38 @@
       "annotation_number": 1,
       "shape": "rectangle",
       "coordinates": {
-        "x": 246.08,
-        "y": 240.07,
-        "width": 1554.49,
-        "height": 2740.86
+        "x": 269,
+        "y": 263,
+        "width": 1501,
+        "height": 2728
       },
-      "area": 4260625
+      "area": 4094728
+    }
+  ],
+  "forbidden_areas": [
+    {
+      "id": "1_ryUbijmD",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 1327,
+        "y": 2599,
+        "width": 423,
+        "height": 298
+      },
+      "area": 126054
+    },
+    {
+      "id": "1_0FybLFub",
+      "annotation_number": 2,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 374,
+        "y": 2587,
+        "width": 136,
+        "height": 356
+      },
+      "area": 48416
     }
   ],
   "other": []
