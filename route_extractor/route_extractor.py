@@ -399,7 +399,41 @@ class RouteExtractor:
         return out
 
     
-    def _find_route_endpoints(self, final_mask, debug=False):
+    def _prune_skeleton(self, skeleton, n_iter=10):
+        """
+        Remove short branch spurs from a skeleton by iteratively deleting
+        endpoint pixels (pixels with exactly one neighbour in the 8-connected
+        sense).  Any branch shorter than n_iter pixels is fully removed, which
+        eliminates the tiny artefact branches produced by skeletonization
+        without disturbing the true endpoints of the main path.
+
+        Parameters
+        ----------
+        skeleton : uint8 ndarray  (non-zero = skeleton pixel)
+        n_iter   : int            number of pruning passes (≈ max spur length
+                                  to remove, in pixels)
+
+        Returns
+        -------
+        pruned skeleton as uint8 ndarray
+        """
+        skel = skeleton.copy().astype(np.uint8)
+        skel[skel != 0] = 1                         # normalise to 0/1
+
+        kernel = np.uint8([[1, 1, 1],
+                           [1, 10, 1],
+                           [1, 1, 1]])
+
+        for _ in range(n_iter):
+            filtered      = cv2.filter2D(skel, -1, kernel)
+            endpoint_mask = filtered == 11           # centre=10 + exactly 1 neighbour
+            if not endpoint_mask.any():
+                break
+            skel[endpoint_mask] = 0
+
+        return skel
+
+    def _find_route_endpoints(self, final_mask, debug=True, prune_iter=10):
         result = {'start': None, 'end': None}
         
         # == Blurring
@@ -415,12 +449,20 @@ class RouteExtractor:
 
         skeleton_mask = skeletonize(final_mask_dilated > 0)  # skimage expects boolean
 
+        # == Pruning — remove tiny spur branches left by skeletonization.
+        # Iteratively deletes endpoint pixels for `prune_iter` passes, which
+        # trims every branch shorter than prune_iter pixels and prevents those
+        # spurious tips from being misidentified as route endpoints.
+        skeleton_pruned = self._prune_skeleton(np.uint8(skeleton_mask), n_iter=prune_iter)
+        print(f"    Skeleton pruned ({prune_iter} iterations); "
+              f"pixels before={skeleton_mask.sum()}, after={skeleton_pruned.sum()}")
+
         if debug:
-            vis_pil = PILImage.fromarray(skeleton_mask)
+            vis_pil = PILImage.fromarray(skeleton_pruned * 255)
             vis_pil.show()
         
         # Detect skeleton endpoints using convolution method
-        endpoint_mask = self.skeleton_endpoints(np.uint8(skeleton_mask))
+        endpoint_mask = self.skeleton_endpoints(skeleton_pruned)
         
         # Extract endpoint coordinates
         endpoint_coords_yx = np.column_stack(np.where(endpoint_mask > 0))
@@ -465,7 +507,7 @@ class RouteExtractor:
         if debug:
             # Create visualization: skeleton with endpoints marked in red
             # Convert boolean skeleton to proper uint8 grayscale image
-            skeleton_uint8 = (skeleton_mask.astype(np.uint8)) * 255
+            skeleton_uint8 = skeleton_pruned * 255
             vis_skeleton = cv2.cvtColor(skeleton_uint8, cv2.COLOR_GRAY2BGR)
             
             # Draw large circles at each endpoint for visibility
