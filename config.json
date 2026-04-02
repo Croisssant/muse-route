@@ -1,0 +1,13 @@
+{
+  "gallery_configs": {
+    "gallery_room_1": "must_see",
+    "gallery_open_space_1": "restricted"
+  },
+  "gallery_config_options": {
+    "must_see": "Must vist route",
+    "restricted": "Route cannot enter",
+    "normal": "No restrictions"
+  },
+  "distance_budget_in_mm": 1000000000,
+  "exhibit_see_distance_in_mm": 1500
+}

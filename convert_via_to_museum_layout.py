@@ -31,6 +31,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
     exits = []
     floor_areas = []
     forbidden_areas = []
+    distance_in_mm = []
     other = []
     
     # Track statistics
@@ -177,6 +178,39 @@ def convert_via_to_museum_layout(via_json_path, output_path):
                 rectangle_data['annotation_number'] = len(forbidden_areas) + 1
                 forbidden_areas.append(rectangle_data)
                 print(f"✓ Forbidden Area: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
+            elif entity_type == '7':  # Distance Reference (in mm)
+                # Get the description which contains the length in mm
+                description = av.get('4', '')  # Attribute 4 is the description field
+                
+                # Calculate pixel length (using width as the reference dimension)
+                pixel_length = width
+                
+                rectangle_data['annotation_number'] = len(distance_in_mm) + 1
+                rectangle_data['description'] = description
+                rectangle_data['pixel_length'] = round(pixel_length, 2)
+                
+                # Try to extract numeric value from description
+                try:
+                    # Remove common units and extract number
+                    mm_value = ''.join(filter(lambda x: x.isdigit() or x == '.', description))
+                    if mm_value:
+                        rectangle_data['length_mm'] = float(mm_value)
+                        rectangle_data['px_per_mm'] = round(pixel_length / float(mm_value), 6)
+                        rectangle_data['mm_per_px'] = round(float(mm_value)/ pixel_length, 6)
+                    else:
+                        rectangle_data['length_mm'] = None
+                        rectangle_data['px_per_mm'] = None
+                        rectangle_data['mm_per_px'] = None
+                except:
+                    rectangle_data['length_mm'] = None
+                    rectangle_data['px_per_mm'] = None
+                    rectangle_data['mm_per_px'] = None
+                
+                distance_in_mm.append(rectangle_data)
+                mm_label = f" = {description}" if description else ""
+                px_per_mm_label = f" ({rectangle_data['px_per_mm']:.4f} px/mm)" if rectangle_data['px_per_mm'] else ""
+                px_per_mm_label = f" ({rectangle_data['mm_per_px']:.4f} mm/px)" if rectangle_data['mm_per_px'] else ""
+                print(f"✓ Distance Reference: {pixel_length:.1f} px{mm_label}{px_per_mm_label}")
             else:
                 other.append(rectangle_data)
                 print(f"✓ Other rectangle: {width:.0f}x{height:.0f} at ({x:.0f}, {y:.0f})")
@@ -198,6 +232,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
                 'exits': len(exits),
                 'floor_areas': len(floor_areas),
                 'forbidden_areas': len(forbidden_areas),
+                'distance_in_mm': len(distance_in_mm),
                 'other': len(other)
             }
         },
@@ -208,6 +243,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
         'exits': exits,
         'floor_areas': floor_areas,
         'forbidden_areas': forbidden_areas,
+        'distance_in_mm': distance_in_mm,
         'other': other
     }
     
@@ -231,6 +267,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
     print(f"  Exits:           {len(exits)}")
     print(f"  Floor Areas:     {len(floor_areas)}")
     print(f"  Forbidden Areas: {len(forbidden_areas)}")
+    print(f"  Distance Refs:   {len(distance_in_mm)}")
     print(f"  Other:           {len(other)}")
     print()
     print(f"✅ Saved to: {output_path}")

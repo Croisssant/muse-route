@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "total_annotations": 113,
-    "export_date": "2026-04-01T13:49:54.192206",
+    "total_annotations": 114,
+    "export_date": "2026-04-02T17:28:41.229816",
     "attributes": {
       "1": {
         "aname": "Entity",
@@ -15,7 +15,8 @@
           "3": "entrance",
           "4": "exit",
           "5": "floor_area",
-          "6": "forbidden_area"
+          "6": "forbidden_area",
+          "7": "distance_in_mm"
         },
         "default_option_id": ""
       },
@@ -34,6 +35,14 @@
         "desc": "",
         "options": {},
         "default_option_id": ""
+      },
+      "4": {
+        "aname": "mm",
+        "anchor_id": "FILE1_Z0_XY1",
+        "type": 1,
+        "desc": "",
+        "options": {},
+        "default_option_id": ""
       }
     },
     "counts": {
@@ -44,6 +53,7 @@
       "exits": 1,
       "floor_areas": 1,
       "forbidden_areas": 2,
+      "distance_in_mm": 1,
       "other": 0
     }
   },
@@ -2903,6 +2913,25 @@
         "height": 356
       },
       "area": 48416
+    }
+  ],
+  "distance_in_mm": [
+    {
+      "id": "1_HU8W6nBO",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 258,
+        "y": 3146,
+        "width": 1523,
+        "height": 14
+      },
+      "area": 21322,
+      "description": "12500",
+      "pixel_length": 1523,
+      "length_mm": 12500.0,
+      "px_per_mm": 0.12184,
+      "mm_per_px": 8.207485
     }
   ],
   "other": []

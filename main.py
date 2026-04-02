@@ -5,6 +5,24 @@ from pathlib import Path
 from spatial_validator import SpatialValidator
 from route_extractor import RouteExtractor
 
+def load_json(file_path):
+    """
+    Load a JSON file and return its contents as a Python object.
+    
+    Args:
+        file_path (str): Path to the JSON file
+        
+    Returns:
+        dict or list: Parsed JSON data
+        
+    Raises:
+        FileNotFoundError: If the file does not exist
+        json.JSONDecodeError: If the file is not valid JSON
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return data
+
 def main():
 
      parser = argparse.ArgumentParser(
@@ -31,8 +49,6 @@ def main():
                               'misalignment when subtracting the original image '
                               '(default: 3; increase to 5-8 for larger dimension gaps)')
      parser.add_argument('--marker-size',          type=int, default=15)
-     parser.add_argument('--proximity-threshold',  type=int, default=25,
-                         help='Distance for exhibit visit detection in pixels (default: 25)')
      parser.add_argument('--debug', action='store_true', help='Enable debugging displays (disabled by default)')
 
      args = parser.parse_args()
@@ -60,6 +76,21 @@ def main():
           
           validated_output_image_path = validated_output_image_path / args.validated_output_image
 
+     # Load annotations
+     annotations_values = load_json(annotations)
+     configs = load_json("./config.json")
+
+     # Value calculations from configs and annotations
+     mm_per_px = None
+     if annotations_values != {}:
+          mm_per_px = annotations_values['distance_in_mm'][0]['mm_per_px']
+     
+     # Calculate proximity_threshold from config
+     proximity_threshold_px = None
+     if mm_per_px is not None and mm_per_px > 0:
+          proximity_threshold_px = int(configs['exhibit_see_distance_in_mm'] / mm_per_px)
+          print(f"Calculated proximity_threshold: {proximity_threshold_px} px (from {configs['exhibit_see_distance_in_mm']} mm)")
+
      
      # Use parsed arguments
      re = RouteExtractor(annotations)
@@ -81,16 +112,10 @@ def main():
 
      validator = SpatialValidator(
           annotations_file=annotations,
-          proximity_threshold=args.proximity_threshold
+          proximity_threshold=proximity_threshold_px if proximity_threshold_px is not None else 25
      )
      
-     # Configure gallery access rules
-     # Options: 'must_see' - route must visit, 'restricted' - route cannot enter, 'normal' - no restriction
-     gallery_configs = {
-          'gallery_room_1': 'must_see',           # No restriction
-          'gallery_open_space_1': 'restricted'      # No restriction
-     }
-     validator.set_gallery_configurations(gallery_configs)
+     validator.set_gallery_configurations(configs['gallery_configs'])
      
      validation_result = validator.validate_route(
           route_points=route_extraction_results.points,
@@ -114,7 +139,7 @@ def main():
           "start_end_location": "entrance_violations" not in violation_reasons and "exit_violations" not in violation_reasons,
           "must_pass_regions": "must_see_gallery_violations" not in violation_reasons,
           "restricted_area_violations": "forbidden_area_violations" in violation_reasons or "gallery_violations" in violation_reasons,
-          "distance_budget": "",
+          "distance_budget": route_extraction_results.route_distance * mm_per_px < configs["distance_budget_in_mm"]
      }
 
      validation_result['validation_summary']['route_pixels_breakdown'] = violation_counts
