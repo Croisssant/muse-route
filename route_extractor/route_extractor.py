@@ -27,6 +27,8 @@ class RouteExtractionResult:
     endpoints: any
     connectivity: any
     final_mask: any
+    skeleton_mask: any
+    route_distance: float
     alignment_method: str
 
 
@@ -377,6 +379,60 @@ class RouteExtractor:
     # Endpoint detection
     # ──────────────────────────────────────────────────────────────────
 
+    def calculate_distance_between_points(self, final_mask, point_a, point_b):
+        """
+        Calculate the shortest distance between two points along route pixels only.
+
+        Uses BFS so the path is guaranteed shortest, and only steps through
+        pixels that exist in final_mask — no straight-line shortcuts.
+
+        Parameters
+        ----------
+        final_mask : uint8 binary mask (route pixels = 255 / 1)
+        point_a    : (x, y) start point — must lie on a route pixel
+        point_b    : (x, y) end point   — must lie on a route pixel
+
+        Returns
+        -------
+        float  arc distance in pixels, or None if no route path exists
+        """
+        from collections import deque
+
+        ys, xs = np.where(final_mask > 0)
+        pixel_set = set(zip(xs.tolist(), ys.tolist()))
+
+        if point_a not in pixel_set:
+            print(f"  ⚠️ point_a {point_a} is not on a route pixel")
+            return None
+        if point_b not in pixel_set:
+            print(f"  ⚠️ point_b {point_b} is not on a route pixel")
+            return None
+        if point_a == point_b:
+            return 0.0
+
+        dist  = {point_a: 0.0}
+        queue = deque([point_a])
+
+        while queue:
+            cx, cy = queue.popleft()
+
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nb = (cx + dx, cy + dy)
+                    if nb not in pixel_set or nb in dist:
+                        continue
+                    dist[nb] = dist[(cx, cy)] + math.sqrt(dx*dx + dy*dy)
+                    if nb == point_b:
+                        print(f"  ✅ Route distance {point_a} → {point_b}: {dist[nb]:.2f} px")
+                        return dist[nb]
+                    queue.append(nb)
+
+        # point_b was never reached — on a different fragment
+        print(f"  ❌ No route path between {point_a} and {point_b} (disconnected fragments)")
+        return None
+
     def skeleton_endpoints(self, skel):
         # Make our input nice, possibly necessary.
         skel = skel.copy()
@@ -433,19 +489,44 @@ class RouteExtractor:
 
         return skel
 
-    def _find_route_endpoints(self, final_mask, debug=False, prune_iter=10):
+    def _find_route_endpoints(self, final_mask, connectivity, debug=False, prune_iter=10):
         result = {'start': None, 'end': None}
-        
-        # == Blurring
-        final_mask_blurred = cv2.GaussianBlur(final_mask, (5, 5), 0)
 
-        # Re-threshold (blur creates gray values, convert back to binary)
-        _, final_mask_binary = cv2.threshold(final_mask_blurred, 127, 255, cv2.THRESH_BINARY)
+        if debug:
+            vis_pil = PILImage.fromarray(final_mask)
+            draw = ImageDraw.Draw(vis_pil)
+    
+            # Add text at top of image
+            try:
+                font = ImageFont.truetype("arial.ttf", 24)
+            except:
+                font = ImageFont.load_default()
+            
+            draw.text((10, 10), "Original Final Mask", fill=255, font=font)
+            vis_pil.show()     
+
+        # MORPH_CLOSE = Dilation → Erosion (fills gaps without breaking connections)
+        kernel = np.ones((3, 3), np.uint8)
+        final_mask_closed = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+        # Optional: gentle dilation to ensure connectivity (Keep for now)
+        kernel_dilate = np.ones((3, 3), np.uint8)  # Smaller kernel!
+        final_mask_dilated = cv2.dilate(final_mask_closed, kernel_dilate, iterations=1) 
 
 
-        # == Dilation
-        kernel_dilate = np.ones((5, 5), np.uint8)  # 3x3 or 5x5
-        final_mask_dilated = cv2.dilate(final_mask_binary, kernel_dilate, iterations=3)
+        if debug:
+            vis_dilated = PILImage.fromarray(final_mask_dilated)
+            draw = ImageDraw.Draw(vis_dilated)
+    
+            # Add text at top of image
+            try:
+                font = ImageFont.truetype("arial.ttf", 24)
+            except:
+                font = ImageFont.load_default()
+            
+            draw.text((10, 10), "Final Mask Dilated", fill=255, font=font)
+
+            vis_dilated.show()
 
         skeleton_mask = skeletonize(final_mask_dilated > 0)  # skimage expects boolean
 
@@ -458,11 +539,23 @@ class RouteExtractor:
               f"pixels before={skeleton_mask.sum()}, after={skeleton_pruned.sum()}")
 
         if debug:
+            # vis_pil = PILImage.fromarray(skeleton_mask)
             vis_pil = PILImage.fromarray(skeleton_pruned * 255)
+            draw = ImageDraw.Draw(vis_pil)
+    
+            # Add text at top of image
+            try:
+                font = ImageFont.truetype("arial.ttf", 24)
+            except:
+                font = ImageFont.load_default()
+            
+            draw.text((10, 10), "Skeleton Mask", fill=255, font=font)
+
             vis_pil.show()
         
         # Detect skeleton endpoints using convolution method
         endpoint_mask = self.skeleton_endpoints(skeleton_pruned)
+        # endpoint_mask = self.skeleton_endpoints(np.uint8(skeleton_mask))
         
         # Extract endpoint coordinates
         endpoint_coords_yx = np.column_stack(np.where(endpoint_mask > 0))
@@ -484,30 +577,60 @@ class RouteExtractor:
         else:
             print(f"  ❌ No START: No endpoints or entrance not defined")
         
-        # Select END: endpoint closest to exit center (excluding START)
-        if endpoint_list and self.exits and self.exits[0]['shape'] == 'rectangle':
-            xc = self.exits[0]['coordinates']
-            x_center = (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2)
-            
-            # Find closest endpoint to exit (exclude START if already assigned)
-            remaining_endpoints = [ep for ep in endpoint_list if ep != result['start']]
-            if remaining_endpoints:
-                end_endpoint = min(remaining_endpoints, key=lambda ep: self._distance(ep, x_center))
-                result['end'] = end_endpoint
-                dist_to_exit = self._distance(end_endpoint, x_center)
-                print(f"  ✅ END: {end_endpoint} (distance to exit: {dist_to_exit:.1f} px)")
-            elif endpoint_list and result['start']:
-                print(f"  ⚠️ Only 1 endpoint detected - using as both START and END")
-                result['end'] = result['start']
-            else:
-                print(f"  ❌ No END: No remaining endpoints")
-        else:
-            print(f"  ❌ No END: No endpoints or exit not defined")
+        # (exclude START if already assigned)
+        remaining_endpoints = [ep for ep in endpoint_list if ep != result['start']]
+        route_distance = None
+        if len(remaining_endpoints) == 1:
+            result['end'] = remaining_endpoints[0]
+            route_distance = self.calculate_distance_between_points(skeleton_pruned, result['start'], result['end'])
+            print(f"  ✅ END: {result['end']} (only remaining endpoint)")
+            print(f"  Distance from Start to End: {route_distance}px")
         
+        elif len(remaining_endpoints) > 1:
+            print(f"  Using furthest distance method")
+            if connectivity['is_connected'] and result['start']:
+                distances = {}
+                for xp in remaining_endpoints:
+                    dist = self.calculate_distance_between_points(skeleton_pruned, result['start'], xp)
+                    if dist is not None:
+                        distances[xp] = dist
+
+                if distances:
+                    result['end'] = max(distances, key=distances.get)
+                    route_distance = distances[result['end']]
+                    print(f"  ✅ END: {result['end']} (furthest from START: {route_distance} px)")
+
+                else:
+                    result['end'] = None
+            
+            else:
+                print(f"  Using closest to Exit Box method")
+                # Select END: endpoint closest to exit center (excluding START)
+                if endpoint_list and self.exits and self.exits[0]['shape'] == 'rectangle':
+                    xc = self.exits[0]['coordinates']
+                    x_center = (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2)
+                    
+                    # Find closest endpoint to exit 
+                    if remaining_endpoints:
+                        # If only 1 endpoint left then its exit, else if connected then find the furthest point, else use the point closest to exit
+                        end_endpoint = min(remaining_endpoints, key=lambda ep: self._distance(ep, x_center))
+                        result['end'] = end_endpoint
+                        dist_to_exit = self._distance(end_endpoint, x_center)
+                        print(f"  ✅ END: {end_endpoint} (distance to exit: {dist_to_exit:.1f} px)")
+
+                    else:
+                        print(f"  ❌ No END: No remaining endpoints")
+                else:
+                    print(f"  ❌ No END: No endpoints or exit not defined")
+        else:
+            result['end'] = None
+
+       
         if debug:
             # Create visualization: skeleton with endpoints marked in red
             # Convert boolean skeleton to proper uint8 grayscale image
             skeleton_uint8 = skeleton_pruned * 255
+            # skeleton_uint8 = (skeleton_mask.astype(np.uint8)) * 255
             vis_skeleton = cv2.cvtColor(skeleton_uint8, cv2.COLOR_GRAY2BGR)
             
             # Draw large circles at each endpoint for visibility
@@ -518,15 +641,13 @@ class RouteExtractor:
                 # Draw white outline for contrast
                 cv2.circle(vis_skeleton, (x, y), radius=12, color=(255, 255, 255), thickness=2)
             
-            # Display the visualization using PIL (more compatible)
-            print(f"  Displaying skeleton visualization (skeleton: white, endpoints: red)")
             # Convert BGR to RGB for PIL
             vis_skeleton_rgb = cv2.cvtColor(vis_skeleton, cv2.COLOR_BGR2RGB)
             vis_pil = PILImage.fromarray(vis_skeleton_rgb)
             vis_pil.show()
 
 
-        return result
+        return result, skeleton_pruned, route_distance
 
     # ──────────────────────────────────────────────────────────────────
     # Connectivity check
@@ -621,6 +742,109 @@ class RouteExtractor:
             'num_fragments' : num_fragments,
             'main_size'     : main_size,
             'fragments'     : fragments,
+        }
+    
+
+    # ──────────────────────────────────────────────────────────────────
+    # Route distance calculation
+    # ──────────────────────────────────────────────────────────────────
+
+    def calculate_route_distance(self, skeleton_mask, connectivity):
+        """
+        Compute the total distance travelled along the drawn route.
+
+        For fragmented routes every connected component is measured independently
+        (only skeleton pixels count — no straight-line shortcuts between fragments).
+        Per-component distances are summed to give the overall route length.
+
+        Parameters
+        ----------
+        skeleton_mask   : uint8 binary skeleton mask (route pixels = 255 / 1)
+        connectivity    : dict returned by _check_route_connectivity()
+        px_per_unit     : scale factor — pixels per real-world unit (e.g. px/metre).
+                          Pass 1.0 to keep distances in pixels.
+        unit_label      : string used in printed output ("px", "m", "cm", …)
+
+        Returns
+        -------
+        dict with keys:
+        total_distance        – sum of all component distances (real-world units)
+        total_distance_px     – same, always in pixels
+        component_distances   – list of dicts, one per component:
+                                {label, distance_px, distance, num_pixels, centroid}
+        """
+        # ── Build pixel adjacency map ──────────────────────────────────────
+        # Collect every lit skeleton pixel; neighbours are the 8-connected set.
+        ys, xs = np.where(skeleton_mask > 0)
+        pixel_set = set(zip(xs.tolist(), ys.tolist()))   # {(x, y), …}
+
+        def neighbours(x, y):
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx, ny = x + dx, y + dy
+                    if (nx, ny) in pixel_set:
+                        yield nx, ny, math.sqrt(dx*dx + dy*dy)   # 1.0 or √2
+
+        # ── Measure each connected component separately ────────────────────
+        num_labels, labels_img, _, centroids = cv2.connectedComponentsWithStats(
+            skeleton_mask, connectivity=8)
+
+        component_distances = []
+
+        for lbl in range(1, num_labels):                   # 0 = background
+            # Pixels belonging to this component
+            comp_ys, comp_xs = np.where(labels_img == lbl)
+            comp_pixels = list(zip(comp_xs.tolist(), comp_ys.tolist()))
+
+            if not comp_pixels:
+                continue
+
+            # BFS / DFS: walk every edge once and accumulate its Euclidean length.
+            # Because the skeleton is 1-px wide this equals the arc length exactly.
+            visited  = set()
+            stack    = [comp_pixels[0]]
+            dist_px  = 0.0
+
+            while stack:
+                cx, cy = stack.pop()
+                if (cx, cy) in visited:
+                    continue
+                visited.add((cx, cy))
+                for nx, ny, step in neighbours(cx, cy):
+                    if (nx, ny) not in visited:
+                        dist_px += step          # count each edge once (DFS tree edge)
+                        stack.append((nx, ny))
+
+            cx_c, cy_c = float(centroids[lbl][0]), float(centroids[lbl][1])
+            component_distances.append({
+                'label'      : lbl,
+                'num_pixels' : len(comp_pixels),
+                'centroid'   : (round(cx_c, 1), round(cy_c, 1)),
+                'distance_px': round(dist_px, 2),
+            })
+
+        # Sort largest → smallest component
+        component_distances.sort(key=lambda d: d['distance_px'], reverse=True)
+        total_px   = sum(d['distance_px'] for d in component_distances)
+
+        # ── Pretty-print ──────────────────────────────────────────────────
+        print("\n[Route Distance Calculation]")
+        main_frag  = connectivity.get('num_fragments', 0)
+        frag_label = "fully connected" if main_frag == 0 else f"{main_frag} fragment(s)"
+        print(f"  Route connectivity : {frag_label}")
+        print(f"  Components measured: {len(component_distances)}")
+        for i, c in enumerate(component_distances, 1):
+            tag = "MAIN" if i == 1 else f"FRAG {i-1}"
+            print(f"    [{tag}]  {c['distance_px']:.1f} px"
+                f"  |  {c['num_pixels']} px  @  {c['centroid']}")
+        print(f"  ──────────────────────────────────────────────")
+        print(f"  TOTAL DISTANCE : {total_px} px")
+
+        return {
+            'total_distance_px'  : total_px,
+            'component_distances': component_distances,
         }
 
     # ──────────────────────────────────────────────────────────────────
@@ -966,7 +1190,7 @@ class RouteExtractor:
             print("ERROR: No route points found!")
             return
         points    = [(int(p[1]), int(p[0])) for p in raw_pts]
-        endpoints = self._find_route_endpoints(final_mask, debug)
+        endpoints, skeleton_mask, route_distance = self._find_route_endpoints(final_mask, connectivity, debug)
 
         return RouteExtractionResult(
             aligned_route=aligned_route,
@@ -974,6 +1198,8 @@ class RouteExtractor:
             endpoints=endpoints,
             connectivity=connectivity,
             final_mask=final_mask,
+            skeleton_mask=skeleton_mask,
+            route_distance=route_distance,
             alignment_method=alignment_method,
         )
     
@@ -1184,8 +1410,17 @@ class RouteExtractor:
             tolerance_px,
             debug
         )
-        
-        self.summary(results.alignment_method, results.connectivity, results.endpoints)
+
+        if results.route_distance is None:
+            distance_info = self.calculate_route_distance(
+                results.skeleton_mask,
+                results.connectivity
+            )
+
+            print(distance_info)
+            results.route_distance = distance_info['total_distance_px']
+
+        # self.summary(results.alignment_method, results.connectivity, results.endpoints)
 
         self._create_visualization(results.aligned_route, 
                                    results.final_mask, 
