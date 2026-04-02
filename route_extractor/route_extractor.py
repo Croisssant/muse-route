@@ -10,6 +10,15 @@ from skimage.morphology import skeletonize
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Custom Exceptions
+# ──────────────────────────────────────────────────────────────────────────────
+
+class RouteAlignmentError(Exception):
+    """Raised when route image cannot be aligned to the original coordinate space."""
+    pass
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Tunables
 # ──────────────────────────────────────────────────────────────────────────────
 MIN_CIRCLE_MATCHES   = 6    # minimum matched circles to trust the homography
@@ -348,11 +357,19 @@ class RouteExtractor:
                     borderValue=(255, 255, 255))
                 return aligned, method
 
-        # ── Fallback: plain resize ─────────────────────────────────────
-        print("  ⚠️  All alignment strategies failed; falling back to plain resize.")
-        aligned = cv2.resize(route_img_bgr, (orig_w, orig_h),
-                             interpolation=cv2.INTER_LINEAR)
-        return aligned, 'resize'
+        # ── Fallback: abort with descriptive error ─────────────────────
+        print("  ❌ All alignment strategies failed!")
+        print("     • No entrance/exit boxes detected, OR")
+        print("     • Insufficient exhibit circles matched")
+        print("     Aborting - cannot proceed with misaligned route.")
+        
+        raise RouteAlignmentError(
+            "Failed to align route image to original coordinate space. "
+            "Ensure the route image contains:\n"
+            "  1. Clearly visible green (entrance) box, AND/OR\n"
+            "  2. Clearly visible yellow (exit) box, AND/OR\n"
+            "  3. At least 6 detectable exhibit circles matching the annotations"
+        )
 
     # ──────────────────────────────────────────────────────────────────
     # Skeletonization
