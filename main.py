@@ -74,56 +74,56 @@ def main():
      )
      
 
-     # print("\n" + "="*70)
-     # print("Spatial Constraint Validation")
-     # print("="*70)
+     print("\n" + "="*70)
+     print("Spatial Constraint Validation")
+     print("="*70)
 
 
-     # validator = SpatialValidator(
-     #      annotations_file=annotations,
-     #      proximity_threshold=args.proximity_threshold
-     # )
+     validator = SpatialValidator(
+          annotations_file=annotations,
+          proximity_threshold=args.proximity_threshold
+     )
      
-     # # Configure gallery access rules
-     # # Options: 'must_see' - route must visit, 'restricted' - route cannot enter, 'normal' - no restriction
-     # gallery_configs = {
-     #      'gallery_room_1': 'must_see',           # No restriction
-     #      'gallery_open_space_1': 'restricted'      # No restriction
-     # }
-     # validator.set_gallery_configurations(gallery_configs)
+     # Configure gallery access rules
+     # Options: 'must_see' - route must visit, 'restricted' - route cannot enter, 'normal' - no restriction
+     gallery_configs = {
+          'gallery_room_1': 'must_see',           # No restriction
+          'gallery_open_space_1': 'restricted'      # No restriction
+     }
+     validator.set_gallery_configurations(gallery_configs)
      
-     # validation_result = validator.validate_route(
-     #      route_points=route_extraction_results.points,
-     #      endpoints=route_extraction_results.endpoints
-     # )
-     # violation_counts = validator.visualize_validation(
-     #      original_image_path=original_image_path,
-     #      route_points=route_extraction_results.points,
-     #      validation_result=validation_result,
-     #      output_path=validated_output_image_path
-     # )
+     validation_result = validator.validate_route(
+          route_points=route_extraction_results.points,
+          endpoints=route_extraction_results.endpoints
+     )
+     violation_counts = validator.visualize_validation(
+          original_image_path=original_image_path,
+          route_points=route_extraction_results.points,
+          validation_result=validation_result,
+          output_path=validated_output_image_path
+     )
 
-     # violation_reasons = validation_result['validation_summary']['violation_reasons']
-     # svr = {
-     #      "connectivity": route_extraction_results.connectivity["is_connected"],
-     #      "wall_crossings": "wall_crossings" in violation_reasons,
-     #      "exhibit_collision": "exhibit_collisions" in violation_reasons,
-     #      "out_of_area_violations": "floor_area_violations" in violation_reasons,
-     # }
-     # scsr = {
-     #      "start_end_location": "entrance_violations" not in violation_reasons and "exit_violations" not in violation_reasons,
-     #      "must_pass_regions": "must_see_gallery_violations" not in violation_reasons,
-     #      "restricted_area_violations": "forbidden_area_violations" in violation_reasons or "gallery_violations" in violation_reasons,
-     #      "distance_budget": "",
-     # }
+     violation_reasons = validation_result['validation_summary']['violation_reasons']
+     svr = {
+          "connectivity": route_extraction_results.connectivity["is_connected"],
+          "wall_crossings": "wall_crossings" in violation_reasons,
+          "exhibit_collision": "exhibit_collisions" in violation_reasons,
+          "out_of_area_violations": "floor_area_violations" in violation_reasons,
+     }
+     scsr = {
+          "start_end_location": "entrance_violations" not in violation_reasons and "exit_violations" not in violation_reasons,
+          "must_pass_regions": "must_see_gallery_violations" not in violation_reasons,
+          "restricted_area_violations": "forbidden_area_violations" in violation_reasons or "gallery_violations" in violation_reasons,
+          "distance_budget": "",
+     }
 
-     # validation_result['validation_summary']['route_pixels_breakdown'] = violation_counts
-     # validation_result['validation_summary']['connectivity'] = route_extraction_results.connectivity
-     # validation_result['validation_summary']['svr'] = svr
-     # validation_result['validation_summary']['scsr'] = scsr
+     validation_result['validation_summary']['route_pixels_breakdown'] = violation_counts
+     validation_result['validation_summary']['connectivity'] = route_extraction_results.connectivity
+     validation_result['validation_summary']['svr'] = svr
+     validation_result['validation_summary']['scsr'] = scsr
      
-     # with open("validation_results.json", "w") as json_file:
-     #      json.dump(validation_result, json_file, indent=4)
+     with open("validation_results.json", "w") as json_file:
+          json.dump(validation_result, json_file, indent=4)
     
 
 if __name__ == '__main__':
