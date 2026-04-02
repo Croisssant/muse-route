@@ -102,6 +102,82 @@ class SpatialValidator:
         """Calculate Euclidean distance between two points."""
         return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
     
+    def _segments_intersect(self, p1, p2, p3, p4):
+        """
+        Check if line segment (p1, p2) intersects with segment (p3, p4).
+        Uses the cross-product method for line intersection.
+        
+        Args:
+            p1: (x, y) first point of segment 1
+            p2: (x, y) second point of segment 1
+            p3: (x, y) first point of segment 2
+            p4: (x, y) second point of segment 2
+        
+        Returns:
+            True if segments intersect, False otherwise
+        """
+        x1, y1 = p1
+        x2, y2 = p2
+        x3, y3 = p3
+        x4, y4 = p4
+        
+        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        
+        if abs(denom) < 1e-10:
+            return False  # Lines are parallel
+        
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+        u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom
+        
+        # Intersection occurs if both t and u are in [0, 1]
+        return 0 <= t <= 1 and 0 <= u <= 1
+    
+    def _line_crosses_polygon(self, p1, p2, polygon):
+        """
+        Check if line segment (p1, p2) crosses through a polygon.
+        Uses line-segment intersection for each polygon edge.
+        
+        Args:
+            p1: (x, y) starting point
+            p2: (x, y) ending point
+            polygon: List of (x, y) tuples forming polygon vertices
+        
+        Returns:
+            True if line crosses polygon, False otherwise
+        """
+        n = len(polygon)
+        for i in range(n):
+            edge_start = polygon[i]
+            edge_end = polygon[(i + 1) % n]
+            
+            if self._segments_intersect(p1, p2, edge_start, edge_end):
+                return True
+        
+        return False
+    
+    def _line_intersects_wall(self, point1, point2):
+        """
+        Check if line segment from point1 to point2 intersects any wall.
+        This is used for line-of-sight validation to ensure exhibits are only
+        visible when there's no wall blocking the view.
+        
+        Args:
+            point1: (x, y) starting point (typically route point)
+            point2: (x, y) ending point (typically exhibit center)
+        
+        Returns:
+            True if line intersects any wall polygon, False otherwise
+        """
+        for wall in self.walls:
+            if wall['shape'] == 'polyline':
+                wall_points = [(p['x'], p['y']) for p in wall['coordinates']['points']]
+                
+                # Check if line segment crosses the wall polygon
+                if self._line_crosses_polygon(point1, point2, wall_points):
+                    return True
+        
+        return False
+    
     def point_in_polygon(self, point, polygon_points):
         """
         Check if a point is inside a polygon using ray casting algorithm.
@@ -340,9 +416,12 @@ class SpatialValidator:
                             'distance': float(round(dist, 2))  # Convert to Python float
                         })
                     
-                    # Check visit (within proximity threshold)
+                    # Check visit (within proximity threshold AND clear line-of-sight)
                     elif dist < radius + self.proximity_threshold:
-                        exhibit_visits[exhibit_id]['visited'] = True
+                        # Verify line-of-sight: only mark as visited if no wall blocks the view
+                        if not self._line_intersects_wall(point, center):
+                            exhibit_visits[exhibit_id]['visited'] = True
+                        # else: within range but blocked by wall - don't mark as visited
             
             # Check if route passes through forbidden areas
             for forbidden_area in self.forbidden_areas:
