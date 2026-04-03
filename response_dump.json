@@ -1,0 +1,75 @@
+{
+  "id": "resp_06e9cc04b76cbfb50069cf6bec73888197b7fb21f9ec2bbfd4",
+  "created_at": 1775201260.0,
+  "error": null,
+  "incomplete_details": null,
+  "instructions": null,
+  "metadata": {},
+  "model": "gpt-5.4-2026-03-05",
+  "object": "response",
+  "output": [
+    {
+      "id": "msg_06e9cc04b76cbfb50069cf6beddf448197bde580c197f20596",
+      "content": [
+        {
+          "annotations": [],
+          "text": "[[703,2954],[703,2820],[516,2820],[516,2588],[516,2376],[516,2203],[516,2001],[516,1815],[516,1642],[516,1488],[516,1336],[516,1206],[516,1053],[516,913],[516,774],[516,636],[585,636],[713,636],[813,636],[993,636],[1171,636],[1338,636],[1368,734],[1368,878],[1368,1025],[1368,1176],[1368,1333],[1368,1494],[1368,1655],[1368,1813],[1368,1974],[1368,2124],[1368,2285],[1275,2285],[1177,2285],[1078,2285],[998,2212],[932,2138],[868,2067],[803,1996],[738,1927],[675,1860],[675,1709],[675,1560],[675,1409],[675,1268],[675,1117],[675,978],[675,845],[675,716],[675,636],[703,2954],[903,2954],[1038,2954]]",
+          "type": "output_text",
+          "logprobs": []
+        }
+      ],
+      "role": "assistant",
+      "status": "completed",
+      "type": "message",
+      "phase": "final_answer"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "temperature": 1.0,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": 0.98,
+  "background": false,
+  "completed_at": 1775201267.0,
+  "conversation": null,
+  "max_output_tokens": null,
+  "max_tool_calls": null,
+  "previous_response_id": null,
+  "prompt": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "reasoning": {
+    "effort": "none",
+    "generate_summary": null,
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "status": "completed",
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "top_logprobs": 0,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 7892,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 277,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 8169
+  },
+  "user": null,
+  "billing": {
+    "payer": "developer"
+  },
+  "frequency_penalty": 0.0,
+  "presence_penalty": 0.0,
+  "store": true
+}
