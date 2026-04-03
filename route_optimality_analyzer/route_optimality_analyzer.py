@@ -364,6 +364,41 @@ class RouteOptimalityAnalyzer:
         return dist_matrix, path_matrix
 
     # ──────────────────────────────────────────────────────────────────────────
+    # Path stitching
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _stitch_segments(self, path_order: list, path_matrix: dict) -> list:
+        """
+        Concatenate per-leg coordinate lists into one continuous chain.
+
+        Reuses the last point of each leg as the first point of the next,
+        eliminating pixel-level gaps caused by independent Dijkstra snapping.
+
+        Parameters
+        ----------
+        path_order  : ordered list of waypoint labels e.g. ['START', 'Exhibit 7', 'END']
+        path_matrix : {(label_a, label_b): [full-res (x,y), ...]}
+
+        Returns
+        -------
+        list of full-res (x, y) forming one unbroken polyline
+        """
+        full_path = []
+        for i in range(len(path_order) - 1):
+            a, b = path_order[i], path_order[i + 1]
+            seg  = path_matrix.get((a, b)) or []
+            if not seg:
+                continue
+            if full_path:
+                # Overwrite the last stored point with seg[0] so the
+                # junction is seamless, then append the rest of the segment
+                full_path[-1] = seg[0]
+                full_path.extend(seg[1:])
+            else:
+                full_path.extend(seg)
+        return full_path
+
+    # ──────────────────────────────────────────────────────────────────────────
     # TSP solver (Held-Karp DP for N≤15, nearest-neighbour heuristic beyond)
     # ──────────────────────────────────────────────────────────────────────────
 
@@ -530,13 +565,16 @@ class RouteOptimalityAnalyzer:
         print(f"  Optimal order    : {' → '.join(path)}")
         print(f"  Total distance   : {total:.1f} px  [{tsp['method']}]")
 
-        return {"ordered_path"  : path,
-                "total_distance": round(total, 2),
-                "method"        : tsp["method"],
-                "legs"          : legs,
-                "path_segments" : segs,
+        stitched = self._stitch_segments(path, path_matrix)
+
+        return {"ordered_path"    : path,
+                "total_distance"  : round(total, 2),
+                "method"          : tsp["method"],
+                "legs"            : legs,
+                "path_segments"   : segs,
+                "stitched_path"   : stitched,
                 "exhibit_waypoints": exhibit_map,
-                "skipped"       : skipped}
+                "skipped"         : skipped}
 
     # ──────────────────────────────────────────────────────────────────────────
     # Exhibit visit validation
@@ -854,34 +892,46 @@ class RouteOptimalityAnalyzer:
 
         # ── Build optimal-path overlay ────────────────────────────────
         path_canvas = canvas.copy()
-        segs = eval_result["shortest"]["path_segments"]
-        colors_seg = [
-            (255, 100, 30),   # orange
-            (30,  120, 255),  # blue
-            (180, 60,  220),  # purple
-            (20,  190, 160),  # teal
-            (220, 180, 30),   # yellow
-        ]
-        for idx, seg in enumerate(segs):
-            col = colors_seg[idx % len(colors_seg)]
-            for k in range(len(seg) - 1):
-                x1, y1 = sc(seg[k][0]),   sc(seg[k][1])
-                x2, y2 = sc(seg[k+1][0]), sc(seg[k+1][1])
-                cv2.line(path_canvas, (x1,y1), (x2,y2), col, 2)
 
-        # Waypoint dots on path canvas
-        wp_map  = eval_result["shortest"].get("exhibit_waypoints", {})
-        for lbl, pt in wp_map.items():
-            cv2.circle(path_canvas, (sc(pt[0]), sc(pt[1])),
-                       max(4, sc(10)), (255, 80, 0), -1)
-            cv2.circle(path_canvas, (sc(pt[0]), sc(pt[1])),
-                       max(4, sc(10)), (255, 255, 255), 1)
+        # Draw the full route as one continuous stitched polyline
+        stitched = eval_result["shortest"].get("stitched_path", [])
+        if len(stitched) > 1:
+            pts = np.array([[sc(p[0]), sc(p[1])] for p in stitched],
+                           dtype=np.int32).reshape(-1, 1, 2)
+            # White shadow for contrast against dark backgrounds
+            cv2.polylines(path_canvas, [pts], False, (255, 255, 255), 5)
+            # Route line on top
+            cv2.polylines(path_canvas, [pts], False, (255, 140, 0),   2)
 
-        # Re-draw START / END on top
+        # Waypoint dots: one per exhibit stop in TSP order
+        path_order = eval_result["shortest"].get("ordered_path", [])
+        wp_map     = eval_result["shortest"].get("exhibit_waypoints", {})
+        for step, lbl in enumerate(path_order):
+            if lbl not in wp_map:
+                continue
+            pt = wp_map[lbl]
+            # Filled white dot with dark border
+            cv2.circle(path_canvas, (sc(pt[0]), sc(pt[1])),
+                       max(5, sc(11)), (40, 40, 60),   -1)
+            cv2.circle(path_canvas, (sc(pt[0]), sc(pt[1])),
+                       max(5, sc(11)), (255, 255, 255),  2)
+            # Step number inside the dot
+            num_str = lbl.replace("Exhibit ", "")
+            fs = max(0.25, s * 0.45)
+            tw, th = cv2.getTextSize(num_str, cv2.FONT_HERSHEY_SIMPLEX, fs, 1)[0]
+            cv2.putText(path_canvas, num_str,
+                        (sc(pt[0]) - tw//2, sc(pt[1]) + th//2),
+                        cv2.FONT_HERSHEY_SIMPLEX, fs, (255, 220, 100), 1, cv2.LINE_AA)
+
+        # Re-draw START / END on top of route
         cv2.circle(path_canvas, (sc(start[0]), sc(start[1])),
                    max(6, sc(15)), (0, 200, 80), -1)
+        cv2.circle(path_canvas, (sc(start[0]), sc(start[1])),
+                   max(6, sc(15)), (255, 255, 255), 2)
         cv2.circle(path_canvas, (sc(end[0]),   sc(end[1])),
                    max(6, sc(15)), (200, 40, 40), -1)
+        cv2.circle(path_canvas, (sc(end[0]),   sc(end[1])),
+                   max(6, sc(15)), (255, 255, 255), 2)
 
         # ── Matplotlib figure ─────────────────────────────────────────
         fig = plt.figure(figsize=(20, 12), facecolor="#1a1a2e")
