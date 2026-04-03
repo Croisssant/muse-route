@@ -37,19 +37,27 @@ response = client.responses.create(
     }]
 )
 
-# ✅ Extract generated image
+# Model Output Dump
+import json
+with open("response_dump.json", "w", encoding="utf-8") as f:
+    json.dump(response.model_dump(), f, indent=2, ensure_ascii=False, default=str)
+
+# Check Image
 image_base64 = None
 
-for output in response.output:
-    if output.type == "image_generation":
-        image_base64 = output.result
-        break
+
+from PIL import Image
+import base64
+import io
+
+# response.output[0] is an ImageGenerationCall object
+image_call = response.output[0]  
+
+# The base64 result is in the .result attribute
+image_base64 = getattr(image_call, "result", None)
 
 if image_base64 is None:
-    raise ValueError("No image returned")
+    raise ValueError("No image returned from model")
 
-# Save image
-with open(output_image_path, "wb") as f:
-    f.write(base64.b64decode(image_base64))
-
-print(f"Edited image saved to {output_image_path}")
+image = Image.open(io.BytesIO(base64.b64decode(image_base64)))
+image.show()
