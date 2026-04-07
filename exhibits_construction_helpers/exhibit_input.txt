@@ -1,0 +1,13 @@
+40: roman
+2-8: roman
+36-39: roman
+9-17: Mauryan
+18-23: Mauryan
+67-82: Greek
+61-66: Japanese
+83-95: Japanese
+24-35: Persian
+96-100: Persian
+1: Persian
+53-60: Persian
+41-52: Tang dynasty

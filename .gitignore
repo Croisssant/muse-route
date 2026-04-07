@@ -13,3 +13,6 @@ __pycache__/
 
 # Logs
 *.log
+
+# Ignore dataset
+exhibits_construction_helpers/data/
