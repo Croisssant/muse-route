@@ -131,6 +131,8 @@ system_prompt_route = f"""
         - Consecutive points should trace a sensible walking path through open floor space.
         - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
         - Do not intentionally pass near non-selected exhibits.
+        - Prefer orthogonal walking segments: most consecutive point pairs should be horizontal or vertical, not diagonal.
+        - Use diagonals only if absolutely necessary for a very short local adjustment in open floor space.
         - Favor efficient exhibit order and short travel distance, but validity is more important than brevity.
         - Think through the route silently first, then output only the final JSON array.
 
@@ -160,6 +162,7 @@ Remember:
 - the path must include enough waypoints to show the full walk.
 - Keep the route short and deliberate.
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
+- Favor a corridor-like Manhattan path made of horizontal and vertical steps.
 - Before answering, silently verify that all selected exhibits are covered and that the must-see gallery is included.
 """
 
