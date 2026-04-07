@@ -3,6 +3,7 @@ import json
 
 from pathlib import Path
 from spatial_validator import SpatialValidator
+from semantic_validator import SemanticValidator
 from route_extractor import RouteExtractor
 
 def load_json(file_path):
@@ -146,6 +147,31 @@ def main():
      validation_result['validation_summary']['connectivity'] = route_extraction_results.connectivity
      validation_result['validation_summary']['svr'] = svr
      validation_result['validation_summary']['scsr'] = scsr
+     
+     # Semantic Validation
+     print("\n" + "="*70)
+     print("Semantic Constraint Validation")
+     print("="*70)
+     
+     # Get visited exhibits from spatial validation
+     visited_exhibits = validation_result['validation_summary'].get('exhibits_visited', [])
+     
+     # Path to exhibits_by_section file
+     exhibits_by_section_path = Path(args.annotations_dir) / 'exhibits_by_section.json'
+     
+     # Create semantic validator
+     semantic_validator = SemanticValidator(
+          config_file='./config.json',
+          visited_exhibits=visited_exhibits,
+          exhibits_by_section_file=str(exhibits_by_section_path)
+     )
+     
+     # Run semantic validation
+     scar, semantic_result_detailed = semantic_validator.validate()
+     
+     # Add semantic validation results to validation_result
+     validation_result['validation_summary']['scar'] = scar
+     validation_result['semantic_validation_details'] = semantic_result_detailed
      
      with open("validation_results.json", "w") as json_file:
           json.dump(validation_result, json_file, indent=4)
