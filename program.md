@@ -26,19 +26,25 @@ Once you get confirmation, kick off the experimentation.
 
 This system validates LLM-generated museum routes against spatial and semantic constraints:
 
-**SVR (Spatial Validation Rules)**:
+**SVR (Spatial Validity Rate)**:
 
 - `connectivity`: Route is a single connected path
 - `wall_crossings`: Route does NOT pass through walls
 - `exhibit_collision`: Route does NOT collide with exhibits
 - `out_of_area_violations`: Route stays within valid floor area
 
-**SCSR (Semantic Constraint Satisfaction Rules)**:
+**SCSR (Spatial Constraint Satisfaction Rate)**:
 
 - `start_end_location`: Route starts at entrance (GREEN box) and ends at exit (YELLOW box)
 - `must_pass_regions`: Route visits all required galleries (see `config.json`)
 - `restricted_area_violations`: Route does NOT enter restricted areas (ORANGE boxes)
 - `distance_budget`: Total route length is within budget (see `config.json`)
+
+**SCAR (Semantic Constraint Alignment Rate)**:
+
+- `specific_exhibit_coverage`: Route visits all specific required exhibits
+- `at_least_n_exhibits_coverage`: Route visits minimum number of exhibits
+- `exhibit_category_coverage`: Route visits at least one exhibit from each required category
 
 ### Visual Annotations
 
@@ -57,10 +63,17 @@ This system validates LLM-generated museum routes against spatial and semantic c
 - Coordinate system: (x, y) where x is horizontal, y is vertical
 - Valid coordinate range: 0 ≤ x < 3195, 0 ≤ y < 1984
 
+### Semantic Requirements (from config.json)
+
+- `exhibit_categories_to_cover`: ["roman"] — Must visit at least one exhibit from each listed category
+- `at_least_n_exhibits_to_cover`: 15 — Must visit at least this many exhibits total
+- `specific_exhibit_to_cover`: [1, 96, 97, 98, 99, 100] — Must visit all these specific exhibit numbers
+- `exhibit_see_distance_in_mm`: 1000 (~122 pixels) — How close path must be to count as "visiting" an exhibit
+
 ### Gallery Configuration (from config.json)
 
-- `gallery_room_1`: must_see — Route MUST visit this gallery
-- `gallery_open_space_1`: restricted — Route CANNOT enter this area
+- `gallery_room_1`: restricted — Route CANNOT enter this area
+- `gallery_open_space_1`: must_see — Route MUST visit this gallery
 - Distance budget: effectively unlimited (1,000,000,000 mm)
 
 ## Experimentation
@@ -86,7 +99,8 @@ This system validates LLM-generated museum routes against spatial and semantic c
 
 1. **Primary Goal**: All SVR checks pass (true for good constraints, false for violations)
 2. **Secondary Goal**: All SCSR checks pass
-3. **Tertiary Goal**: Minimize `total_violations` count
+3. **Tertiary Goal**: All SCAR checks pass (100% coverage on all semantic requirements)
+4. **Quaternary Goal**: Minimize `total_violations` count
 
 Note that in the validation output:
 
@@ -125,6 +139,22 @@ After validation completes, check `validation_results.json`:
       "must_pass_regions": false,
       "restricted_area_violations": false,
       "distance_budget": true
+    },
+    "scar": {
+      "specific_exhibit_coverage": {
+        "valid": false,
+        "percentage": 16.7
+      },
+      "at_least_n_exhibits_coverage": {
+        "valid": true,
+        "percentage": 100.0
+      },
+      "exhibit_category_coverage": {
+        "roman": {
+          "valid": true,
+          "percentage": 91.7
+        }
+      }
     }
   }
 }
@@ -140,10 +170,10 @@ grep '"is_valid":\|"total_violations":\|"svr":\|"scsr":' validation_results.json
 
 When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated).
 
-The TSV has a header row and 7 columns:
+The TSV has a header row and 8 columns:
 
 ```
-commit	is_valid	total_violations	svr_pass	scsr_pass	status	description
+commit	is_valid	total_violations	svr_pass	scsr_pass	scar_pass	status	description
 ```
 
 1. git commit hash (short, 7 chars)
@@ -151,24 +181,26 @@ commit	is_valid	total_violations	svr_pass	scsr_pass	status	description
 3. total_violations count
 4. svr_pass: "4/4" if all pass, "2/4" if 2 out of 4 pass, etc.
 5. scsr_pass: "4/4" if all pass, "3/4" if 3 out of 4 pass, etc.
-6. status: `keep`, `discard`, or `crash`
-7. short text description of what this experiment tried
+6. scar_pass: "3/3" if all pass, "2/3" if 2 out of 3 pass, etc.
+7. status: `keep`, `discard`, or `crash`
+8. short text description of what this experiment tried
 
 Example:
 
 ```
-commit	is_valid	total_violations	svr_pass	scsr_pass	status	description
-a1b2c3d	false	3257	1/4	3/4	keep	baseline - original prompts
-b2c3d4e	false	1842	2/4	3/4	keep	emphasize "do not cross walls" 3x in prompt
-c3d4e5f	false	4103	1/4	2/4	discard	removed coordinate constraints - made worse
-d4e5f6g	false	0	0/0	0/0	crash	invalid JSON response from GPT
-e5f6g7h	true	0	4/4	4/4	keep	added step-by-step reasoning + visual examples
+commit	is_valid	total_violations	svr_pass	scsr_pass	scar_pass	status	description
+a1b2c3d	false	3257	1/4	3/4	2/3	keep	baseline - original prompts
+b2c3d4e	false	1842	2/4	3/4	2/3	keep	emphasize "do not cross walls" 3x in prompt
+c3d4e5f	false	4103	1/4	2/4	1/3	discard	removed coordinate constraints - made worse
+d4e5f6g	false	0	0/0	0/0	0/0	crash	invalid JSON response from GPT
+e5f6g7h	true	0	4/4	4/4	3/3	keep	added step-by-step reasoning + visual examples
 ```
 
 To calculate pass rates:
 
 - SVR: count how many of {connectivity: true, wall_crossings: false, exhibit_collision: false, out_of_area_violations: false} are satisfied
 - SCSR: count how many of {start_end_location: true, must_pass_regions: true, restricted_area_violations: false, distance_budget: true} are satisfied
+- SCAR: count how many of {specific_exhibit_coverage.valid: true, at_least_n_exhibits_coverage.valid: true, all exhibit_category_coverage[].valid: true} are satisfied
 
 ## The Experiment Loop
 

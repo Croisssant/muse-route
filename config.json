@@ -5,11 +5,11 @@
     "normal": "No restrictions"
   },
   "gallery_configs": {
-    "gallery_room_1": "must_see",
-    "gallery_open_space_1": "restricted"
+    "gallery_room_1": "restricted",
+    "gallery_open_space_1": "must_see"
   },
   "distance_budget_in_mm": 1000000000,
-  "exhibit_see_distance_in_mm": 1000,
+  "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": ["roman"],
   "at_least_n_exhibits_to_cover": 15,
   "specific_exhibit_to_cover": [1, 96, 97, 98, 99, 100]
