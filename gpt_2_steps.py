@@ -120,12 +120,17 @@ system_prompt_route = f"""
 
         ### Visit definition
         - A selected exhibit counts as visited when the path comes within 183 pixels of that exhibit's numbered location.
+        - Missing even one selected exhibit is a failure.
+        - The route is not acceptable unless it visits all selected exhibits, especially required exhibits [1, 96, 97, 98, 99, 100].
+        - The route is not acceptable unless it passes through the must-see gallery.
 
         ### Path construction rules
         - The path must be one continuous, physically plausible walking route.
         - Use a multi-point polyline with many waypoints, not a single point and not just 2 points.
-        - Return between 25 and 120 coordinate pairs.
+        - Return between 30 and 55 coordinate pairs.
         - Consecutive points should trace a sensible walking path through open floor space.
+        - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
+        - Do not intentionally pass near non-selected exhibits.
         - Favor efficient exhibit order and short travel distance, but validity is more important than brevity.
         - Think through the route silently first, then output only the final JSON array.
 
@@ -153,6 +158,9 @@ Remember:
 - the first point must be inside the entrance,
 - the last point must be inside the exit,
 - the path must include enough waypoints to show the full walk.
+- Keep the route short and deliberate.
+- Avoid sweeping through large parts of the museum just to pass near extra exhibits.
+- Before answering, silently verify that all selected exhibits are covered and that the must-see gallery is included.
 """
 
 response_route = client.responses.create(
