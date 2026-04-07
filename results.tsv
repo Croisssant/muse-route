@@ -1,1 +1,36 @@
-﻿commit	is_valid	total_violations	svr_pass	scsr_pass	scar_pass	status	description
+commit	is_valid	total_violations	svr_pass	scsr_pass	scar_pass	status	description
+4d69253	false	0	0/0	0/0	0/0	crash	baseline - original prompts crashed before validation during route drawing
+f0fb33a	false	0	0/0	0/0	0/0	crash	added semantic-aware selection and stricter route format but hit Pillow list-coordinate bug
+e118737	false	2341	2/4	2/4	3/3	keep	perfect semantics after tuple fix, but route still hits walls exhibits and restricted gallery
+4385277	false	10565	1/4	4/4	3/3	discard	avoided restricted gallery and fixed endpoints, but wall crossings exploded
+69a89a8+dirty1	false	6937	2/4	2/4	3/3	discard	safe Roman exhibit set only; selection obeyed but route quality regressed
+69a89a8+dirty2	false	7810	2/4	3/4	3/3	discard	added aisle-following and no-top-right-room route hints; still entered restricted gallery
+69a89a8+dirty3	false	7232	1/4	1/4	2/3	discard	added preferred exhibit order; lost must-pass and specific exhibit coverage
+590936a	false	6147	2/4	4/4	3/3	keep	shortened route and enforced full required coverage to preserve all non-spatial checks
+590936a+dirty1	false	1537	2/4	4/4	3/3	keep	added orthogonal corridor-style segments, sharply reducing wall and exhibit violations
+e5d61f9+dirty1	false	2144	2/4	3/4	3/3	discard	added exhibit-clearance wording; lowered total vs older baselines but lost start-end correctness
+e5d61f9+dirty2	false	7793	1/4	3/4	3/3	discard	added central slanted-island avoidance; caused severe wall crossings and floor-area violations
+e5d61f9+dirty3	false	1010	2/4	3/4	3/3	keep	safe Roman selection with orthogonal routing produced the lowest total violations so far but missed start-end
+e5d61f9+dirty4	false	1432	2/4	4/4	3/3	keep	added endpoint anchors to safe Roman plus orthogonal routing, restoring all non-spatial checks
+b44f910+dirty1	false	2594	2/4	3/4	2/3	discard	added strong wall-buffer wording; reduced wall pixels but lost must-see gallery and specific exhibit coverage
+b44f910+dirty2	false	2187	2/4	3/4	2/3	discard	increased waypoint count for cleaner turns; route missed must-see gallery and specific exhibits
+b44f910+dirty3	false	3118	2/4	3/4	2/3	discard	required exact entrance and exit coordinates; route became too rigid and lost coverage
+b44f910+dirty4	false	804	2/4	3/4	3/3	keep	swapped in exhibit 40 instead of 38; best total violations so far but missed must-see gallery
+b44f910+dirty5	false	1625	2/4	4/4	3/3	discard	hard must-see gallery anchor fixed coverage but increased wall and exhibit collisions
+b44f910+dirty6	false	3221	2/4	4/4	3/3	discard	shallower gallery anchor still caused a large spatial regression
+b44f910+dirty7	false	1154	2/4	4/4	3/3	keep	soft gallery-transition cue preserved safe Roman set and recovered all non-spatial checks
+b44f910+dirty8	false	6808	2/4	4/4	3/3	discard	forced left-side approach to Persian cluster; dramatically increased wall and exhibit collisions
+b44f910+dirty9	false	3724	2/4	3/4	3/3	discard	replaced exhibit 36 with 38; introduced restricted-area violations and higher collisions
+b44f910+dirty10	false	3098	2/4	2/4	1/3	discard	fully generalized prompts removed too much benchmark structure and lost required coverage
+b44f910+dirty11	false	7734	1/4	2/4	2/3	discard	tightened generalized prompts but they still failed required selection and must-see gallery coverage
+b44f910+dirty12	false	4294	1/4	2/4	3/3	discard	hybrid generalized prompt kept safe selection but drifted into forbidden and out-of-area regions
+b44f910+dirty13	false	2681	2/4	3/4	3/3	discard	added generic safety-margin guidance; still entered restricted gallery and regressed from keeper
+b44f910+dirty14	false	2053	2/4	3/4	2/3	discard	restored stronger prompt shape but run missed must-see gallery and specific exhibit coverage
+b44f910+dirty15	false	3494	2/4	2/4	2/3	discard	replicate of restored strong prompt confirmed high variance and weak reliability
+b44f910+dirty16	false	3889	2/4	3/4	2/3	discard	added conservative-route wording; reduced reliability and missed must-see gallery
+b44f910+dirty17	false	4680	2/4	4/4	3/3	discard	added dense-cluster edge-skimming cue; caused severe wall crossings
+b44f910+dirty18	false	3073	2/4	3/4	3/3	discard	generalized structured prompt stayed reusable but reintroduced restricted-gallery violations
+b44f910+dirty19	false	1467	2/4	2/4	3/3	keep	generalized ordered-selection prompt cut total violations sharply but still missed exit and restricted-gallery checks
+b44f910+dirty20	false	2119	2/4	2/4	3/3	discard	added safer-endpoint and visit-from-outside wording; lowered exhibit collisions but introduced forbidden-area drift
+b44f910+dirty21	false	2363	2/4	4/4	3/3	keep	generalized smooth-order prompt restored all non-spatial checks but route remained too sprawling
+b44f910+dirty22	false	4872	2/4	2/4	3/3	discard	stricter preference-matching generalized selection made the route much less stable and reintroduced restricted-gallery violations
