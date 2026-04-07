@@ -41,23 +41,32 @@ user_preference = "I only want to visit Roman Exhibits"
 
 # Build prompt for selecting exhibits
 system_prompt_selection = f"""
-    You are a museum assistant AI choosing exhibits for a route-planning benchmark.
+    You are a museum assistant AI selecting exhibits for a route-planning benchmark.
 
     Here is the full exhibit list in JSON:
     {exhibits_json}
 
     Hard benchmark requirements that override user preference when there is any conflict:
-    1. The final route must visit exhibit numbers [1, 96, 97, 98, 99, 100].
+    1. The final route must include exhibit numbers [1, 96, 97, 98, 99, 100].
     2. The final route must cover at least 15 exhibits total.
     3. The final route must include at least one Roman exhibit.
 
-    Selection policy:
-    1. Always include exhibit numbers [1, 96, 97, 98, 99, 100].
-    2. Prefer Roman exhibits [2, 3, 4, 5, 6, 36, 37, 38, 39] because they satisfy Roman coverage while staying away from the restricted top-right room.
-    3. Avoid selecting Roman exhibits [7, 8] unless absolutely necessary, because they pull the route close to the restricted gallery.
-    4. If the preferred 15-exhibit set [1, 96, 97, 98, 99, 100, 2, 3, 4, 5, 6, 36, 37, 38, 39] is available, return it unchanged.
-    5. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
-    6. Do not include duplicate exhibit numbers.
+    Selection process:
+    1. Start by including every hard-required exhibit.
+    2. Add additional exhibits until there are exactly 15 unique exhibit numbers.
+    3. Strongly prefer exhibits that match the user preference.
+    4. Avoid redundant choices when several exhibits satisfy the same preference equally well.
+    5. If there is uncertainty, prefer a conservative set that is easier to route compactly rather than a sprawling set.
+    6. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
+    7. Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
+    8. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
+    9. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
+
+    Validation checklist before responding:
+    1. [1, 96, 97, 98, 99, 100] are all present.
+    2. At least one Roman exhibit is present.
+    3. The list contains exactly 15 unique integers.
+    4. The order should represent a plausible visit order, not a random order.
 
     Output rules:
     1. Output ONLY a JSON array of exhibit numbers.
@@ -68,7 +77,9 @@ user_prompt_selection = f"""
 User preference: {user_preference}
 
 Return exactly 15 exhibit numbers that satisfy the benchmark requirements above.
-Prefer this exact list if available: [1, 96, 97, 98, 99, 100, 2, 3, 4, 5, 6, 36, 37, 38, 39]
+Follow the validation checklist before you answer.
+The JSON array order should be the recommended visiting order.
+Avoid orders that bounce between distant exhibit groups.
 """
 
 response_selection = client.responses.create(
@@ -100,31 +111,38 @@ filtered_exhibits = [e for e in exhibits_json if e["exhibit_number"] in selected
 system_prompt_route = f"""
         You are a museum path planning assistant generating a single drawable polyline on top of the museum image.
 
-        Produce a route that satisfies the benchmark exactly. Treat these rules as HARD requirements.
+        Produce a route that satisfies the benchmark exactly. Treat the following as HARD requirements.
 
         ### Visual legend
-        - BLUE outlines = walls. Never cross or touch them.
-        - ORANGE bounding box = restricted area. Never enter it.
-        - PURPLE bounding boxes = gallery areas.
-        - GREEN bounding box = entrance. The first coordinate must be inside it.
-        - YELLOW bounding box = exit. The last coordinate must be inside it.
+        - BLUE outlines = walls and structural barriers. Never cross them.
+        - ORANGE boxes = restricted areas. Never enter them.
+        - PURPLE boxes = gallery areas. Some may be must-see or restricted.
+        - GREEN box = entrance. The route must start inside it.
+        - YELLOW box = exit. The route must end inside it.
         - Numbered circles = exhibits.
 
-        ### Mandatory route constraints
-        - Start inside the GREEN entrance box, preferably near [668, 2790].
-        - End inside the YELLOW exit box, preferably near [920, 2790].
-        - Pass through the required purple must-see gallery area.
-        - Never enter the restricted gallery_room_1 area or the ORANGE restricted box.
-        - Stay inside the museum floor area.
+        ### Non-negotiable constraints
+        - Start inside the entrance box, with the first point clearly inside rather than on the border.
+        - End inside the exit box, with the last point clearly inside rather than on the border.
+        - Enter every must-see gallery or region.
+        - Never enter any restricted gallery or restricted region.
+        - Stay inside the valid museum floor area.
         - Never cross walls.
-        - Never collide with exhibits; pass near target exhibits without drawing through their markers.
-        - Visit only the selected exhibits and ignore all other exhibits.
+        - Never draw through exhibit markers or obstacle geometry.
+        - Visit all selected exhibits and ignore unselected exhibits.
 
         ### Visit definition
         - A selected exhibit counts as visited when the path comes within 183 pixels of that exhibit's numbered location.
         - Missing even one selected exhibit is a failure.
-        - The route is not acceptable unless it visits all selected exhibits, especially required exhibits [1, 96, 97, 98, 99, 100].
-        - The route is not acceptable unless it passes through the must-see gallery.
+        - Missing a required gallery or region is a failure.
+        - If a selected exhibit is near a restricted area or obstacle cluster, satisfy the visit from the nearest legal open-floor location instead of entering the risky area.
+
+        ### Planning strategy
+        - First, silently identify a safe corridor skeleton from entrance to exit that stays legal.
+        - Second, follow the selected exhibit list in the order provided, unless a tiny local reorder is clearly safer.
+        - Third, attach short, legal detours from that skeleton to cover the selected exhibits.
+        - Fourth, convert the final walk into a single continuous polyline.
+        - If uncertain, choose the safer route instead of the shorter shortcut.
 
         ### Path construction rules
         - The path must be one continuous, physically plausible walking route.
@@ -132,11 +150,8 @@ system_prompt_route = f"""
         - Return between 30 and 55 coordinate pairs.
         - Consecutive points should trace a sensible walking path through open floor space.
         - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
-        - Do not intentionally pass near non-selected exhibits.
-        - Prefer orthogonal walking segments: most consecutive point pairs should be horizontal or vertical, not diagonal.
-        - Use diagonals only if absolutely necessary for a very short local adjustment in open floor space.
-        - Favor efficient exhibit order and short travel distance, but validity is more important than brevity.
-        - Think through the route silently first, then output only the final JSON array.
+        - Prefer orthogonal walking segments where practical, using diagonals only for short local adjustments in open floor space.
+        - Favor open corridors and wider spaces over risky shortcuts near hazards.
 
         ### Coordinate constraints
         - Image width: {img_width} pixels
@@ -159,13 +174,20 @@ Plan a valid route for this exact selected exhibit set:
 
 Remember:
 - the route must be a continuous drawable JSON polyline,
-- the first point should be near [668, 2790] inside the entrance,
-- the last point should be near [920, 2790] inside the exit,
+- the first point must be inside the entrance,
+- the last point must be inside the exit,
+- keep the first and last points comfortably inside those boxes, not on their borders,
 - the path must include enough waypoints to show the full walk.
+- treat the selected exhibit list as the default visiting order,
 - Keep the route short and deliberate.
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
-- Before answering, silently verify that all selected exhibits are covered and that the must-see gallery is included.
+- Before answering, silently verify that:
+  1. all selected exhibits are covered,
+  2. every must-see gallery is entered,
+  3. the first point is inside the entrance,
+  4. the last point is inside the exit.
+- if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
 """
 
 response_route = client.responses.create(
