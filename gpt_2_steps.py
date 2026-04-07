@@ -179,6 +179,11 @@ except json.JSONDecodeError:
     else:
         raise ValueError(f"Failed to parse JSON route:\n{text_output_route}")
 
+if len(route) < 2:
+    raise ValueError(f"Route must contain at least 2 coordinate pairs:\n{text_output_route}")
+
+route = [tuple(point) for point in route]
+
 # -------- Validate route coordinates --------
 invalid_points = []
 for i, (x, y) in enumerate(route):
