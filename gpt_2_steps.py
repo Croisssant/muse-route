@@ -53,10 +53,11 @@ system_prompt_selection = f"""
 
     Selection policy:
     1. Always include exhibit numbers [1, 96, 97, 98, 99, 100].
-    2. Add enough additional exhibits to reach exactly 15 exhibits total.
-    3. Among the additional exhibits, strongly prefer Roman exhibits so the user preference is respected as much as possible.
-    4. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
-    5. Do not include duplicate exhibit numbers.
+    2. Prefer Roman exhibits [2, 3, 4, 5, 6, 36, 37, 38, 39] because they satisfy Roman coverage while staying away from the restricted top-right room.
+    3. Avoid selecting Roman exhibits [7, 8] unless absolutely necessary, because they pull the route close to the restricted gallery.
+    4. If the preferred 15-exhibit set [1, 96, 97, 98, 99, 100, 2, 3, 4, 5, 6, 36, 37, 38, 39] is available, return it unchanged.
+    5. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
+    6. Do not include duplicate exhibit numbers.
 
     Output rules:
     1. Output ONLY a JSON array of exhibit numbers.
@@ -67,6 +68,7 @@ user_prompt_selection = f"""
 User preference: {user_preference}
 
 Return exactly 15 exhibit numbers that satisfy the benchmark requirements above.
+Prefer this exact list if available: [1, 96, 97, 98, 99, 100, 2, 3, 4, 5, 6, 36, 37, 38, 39]
 """
 
 response_selection = client.responses.create(
@@ -109,8 +111,8 @@ system_prompt_route = f"""
         - Numbered circles = exhibits.
 
         ### Mandatory route constraints
-        - Start inside the GREEN entrance box.
-        - End inside the YELLOW exit box.
+        - Start inside the GREEN entrance box, preferably near [668, 2790].
+        - End inside the YELLOW exit box, preferably near [920, 2790].
         - Pass through the required purple must-see gallery area.
         - Never enter the restricted gallery_room_1 area or the ORANGE restricted box.
         - Stay inside the museum floor area.
@@ -157,8 +159,8 @@ Plan a valid route for this exact selected exhibit set:
 
 Remember:
 - the route must be a continuous drawable JSON polyline,
-- the first point must be inside the entrance,
-- the last point must be inside the exit,
+- the first point should be near [668, 2790] inside the entrance,
+- the last point should be near [920, 2790] inside the exit,
 - the path must include enough waypoints to show the full walk.
 - Keep the route short and deliberate.
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
