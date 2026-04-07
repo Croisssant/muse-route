@@ -22,7 +22,7 @@ client = OpenAI()
 # -------- File paths --------
 input_image_path = "./images/annotated_walls_museum_layout_02/original_images/annotated_walls_museum_layout_02.png"
 output_image_path = "./images/annotated_walls_museum_layout_02/route_images/chatgpt_route_2.png"
-exhibits_json_path = "./exhibits/exhibit_list.json"
+exhibits_json_path = "./original_floorplans/museum_layout_01/exhibit_list.json"
 
 # -------- Load exhibit JSON --------
 with open(exhibits_json_path, "r", encoding="utf-8") as f:

@@ -40,7 +40,7 @@ def main():
      parser.add_argument('--original-image',       required=True)
      parser.add_argument('--annotations',          required=True)
      parser.add_argument('--images-dir', default='./images')
-     parser.add_argument('--annotations-dir', default='./floorplan_annotations')
+     parser.add_argument('--annotations-dir', default='./original_floorplans/museum_layout_01')
      parser.add_argument('--extraction-output-image',    default=None)
      parser.add_argument('--validated-output-image',    default=None)
      parser.add_argument('--difference-threshold', type=int, default=10)
