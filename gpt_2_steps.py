@@ -20,13 +20,57 @@ load_dotenv(override=True)
 client = OpenAI()
 
 # -------- File paths --------
+config_path = "./config.json"
 input_image_path = "./images/annotated_walls_museum_layout_02/original_images/annotated_walls_museum_layout_02.png"
 output_image_path = "./images/annotated_walls_museum_layout_02/route_images/chatgpt_route_2.png"
 exhibits_json_path = "./original_floorplans/museum_layout_01/exhibit_list.json"
+annotations_json_path = "./original_floorplans/museum_layout_01/museum_layout_annotations.json"
 
 # -------- Load exhibit JSON --------
 with open(exhibits_json_path, "r", encoding="utf-8") as f:
     exhibits_json = json.load(f)
+
+with open(config_path, "r", encoding="utf-8") as f:
+    configs = json.load(f)
+
+with open(annotations_json_path, "r", encoding="utf-8") as f:
+    annotations_json = json.load(f)
+
+required_exhibit_ids = configs.get("specific_exhibit_to_cover", [])
+required_exhibit_ids_json = json.dumps(required_exhibit_ids)
+required_exhibit_count = len(required_exhibit_ids)
+
+required_categories = configs.get("exhibit_categories_to_cover", [])
+required_categories_json = json.dumps(required_categories)
+
+min_exhibits_to_cover = configs.get("at_least_n_exhibits_to_cover", required_exhibit_count)
+selection_target_count = max(min_exhibits_to_cover, required_exhibit_count)
+
+visit_distance_mm = configs.get("exhibit_see_distance_in_mm")
+distance_entries = annotations_json.get("distance_in_mm", [])
+mm_per_px = distance_entries[0].get("mm_per_px") if distance_entries else None
+visit_distance_px = int(round(visit_distance_mm / mm_per_px)) if visit_distance_mm and mm_per_px else None
+visit_distance_text = (
+    f"{visit_distance_px} pixels"
+    if visit_distance_px is not None
+    else f"the configured visit radius derived from {visit_distance_mm} mm"
+)
+
+required_category_requirement = (
+    f"    3. The final route must include at least one exhibit from each required category in {required_categories_json}.\n"
+    if required_categories
+    else "    3. There are no required exhibit categories configured for this run.\n"
+)
+required_category_checklist = (
+    f"    2. At least one exhibit from each required category in {required_categories_json} is present.\n"
+    if required_categories
+    else "    2. There are no required exhibit-category checks for this run.\n"
+)
+required_category_prompt_line = (
+    f"Ensure the selection covers each required category in {required_categories_json}.\n"
+    if required_categories
+    else ""
+)
 
 # -------- Image info --------
 image = Image.open(input_image_path)
@@ -47,13 +91,13 @@ system_prompt_selection = f"""
     {exhibits_json}
 
     Hard benchmark requirements that override user preference when there is any conflict:
-    1. The final route must include exhibit numbers [1, 96, 97, 98, 99, 100].
-    2. The final route must cover at least 15 exhibits total.
-    3. The final route must include at least one Roman exhibit.
+    1. The final route must include exhibit numbers {required_exhibit_ids_json}.
+    2. The final route must cover at least {min_exhibits_to_cover} exhibits total.
+{required_category_requirement}
 
     Selection process:
-    1. Start by locking in every hard-required exhibit [1, 96, 97, 98, 99, 100]. These six exhibits are mandatory and cannot be removed.
-    2. Add additional exhibits until there are exactly 15 unique exhibit numbers.
+    1. Start by locking in every hard-required exhibit {required_exhibit_ids_json}. These required exhibits are mandatory and cannot be removed.
+    2. Add additional exhibits until there are exactly {selection_target_count} unique exhibit numbers.
     3. Strongly prefer exhibits that match the user preference.
     4. When several exhibits satisfy the preference equally well, prefer the subset that forms a compact visit plan with less backtracking and fewer long jumps.
     5. Avoid redundant choices that spread the route across distant regions when a more compact preference-matching option exists.
@@ -65,9 +109,8 @@ system_prompt_selection = f"""
     11. Prefer optional exhibits that can be covered by one or two compact clusters rather than optional exhibits scattered across many distant regions.
 
     Validation checklist before responding:
-    1. [1, 96, 97, 98, 99, 100] are all present.
-    2. At least one Roman exhibit is present.
-    3. The list contains exactly 15 unique integers.
+    1. {required_exhibit_ids_json} are all present.
+{required_category_checklist}    3. The list contains exactly {selection_target_count} unique integers.
     4. The order should represent a plausible visit order, not a random order.
     5. If any required exhibit is missing, replace optional exhibits until all required exhibits are present before responding.
 
@@ -79,12 +122,13 @@ system_prompt_selection = f"""
 user_prompt_selection = f"""
 User preference: {user_preference}
 
-Return exactly 15 exhibit numbers that satisfy the benchmark requirements above.
+Return exactly {selection_target_count} exhibit numbers that satisfy the benchmark requirements above.
 Follow the validation checklist before you answer.
 The JSON array order should be the recommended visiting order.
 Avoid orders that bounce between distant exhibit groups.
-Do not submit any answer that omits one of [1, 96, 97, 98, 99, 100].
+Do not submit any answer that omits one of {required_exhibit_ids_json}.
 Prefer optional exhibits that let the route stay compact instead of visiting many separate clusters.
+{required_category_prompt_line}The JSON array should remain valid even if the config values change in a future run.
 """
 
 response_selection = client.responses.create(
@@ -139,13 +183,11 @@ system_prompt_route = f"""
         - Never violate a higher-priority rule to satisfy a lower-priority one.
 
         ### Visit definition
-        - A selected exhibit counts as visited when the path comes within 183 pixels of that exhibit's numbered location.
+        - A selected exhibit counts as visited when the path comes within {visit_distance_text} of that exhibit's numbered location.
         - Missing even one selected exhibit is a failure.
         - Missing a required gallery or region is a failure.
         - If a selected exhibit is near a restricted area or obstacle cluster, satisfy the visit from the nearest legal open-floor location instead of entering the risky area.
         - If a selected exhibit would require entering restricted space or crossing a barrier, approach only as closely as the nearest legal open-floor position allows.
-        - You do not need to pass through an exhibit marker to count it as visited. Prefer legal open-floor standoff positions that stay comfortably clear of exhibit circles while still falling within the visit radius.
-        - If two or more nearby selected exhibits can be covered from the same safe corridor-side position or short legal detour, prefer that shared standoff instead of threading between the exhibit markers.
         - A required gallery visit only needs legal entry into that gallery. Once the route has legally entered the required gallery, leave it again by the nearest legal continuation instead of wandering through adjacent interiors.
 
         ### Planning strategy
@@ -201,7 +243,6 @@ Remember:
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
 - make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
-- selected exhibits only require proximity, not direct contact; favor open-floor standoff points and shared safe approaches rather than weaving through exhibit clusters,
 - if a must-see gallery is close to restricted space, touch the legal portion you need and then leave immediately rather than traversing deeply through nearby gallery interiors,
 - trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
 - Before answering, silently verify that:
