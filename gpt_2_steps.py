@@ -52,21 +52,23 @@ system_prompt_selection = f"""
     3. The final route must include at least one Roman exhibit.
 
     Selection process:
-    1. Start by including every hard-required exhibit.
+    1. Start by locking in every hard-required exhibit [1, 96, 97, 98, 99, 100]. These six exhibits are mandatory and cannot be removed.
     2. Add additional exhibits until there are exactly 15 unique exhibit numbers.
     3. Strongly prefer exhibits that match the user preference.
-    4. Avoid redundant choices when several exhibits satisfy the same preference equally well.
-    5. If there is uncertainty, prefer a conservative set that is easier to route compactly rather than a sprawling set.
-    6. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
-    7. Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
-    8. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
-    9. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
+    4. When several exhibits satisfy the preference equally well, prefer the subset that forms a compact visit plan with less backtracking and fewer long jumps.
+    5. Avoid redundant choices that spread the route across distant regions when a more compact preference-matching option exists.
+    6. If there is uncertainty, prefer a conservative set that is easier to route legally and compactly rather than a sprawling set.
+    7. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
+    8. Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
+    9. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
+    10. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
 
     Validation checklist before responding:
     1. [1, 96, 97, 98, 99, 100] are all present.
     2. At least one Roman exhibit is present.
     3. The list contains exactly 15 unique integers.
     4. The order should represent a plausible visit order, not a random order.
+    5. If any required exhibit is missing, replace optional exhibits until all required exhibits are present before responding.
 
     Output rules:
     1. Output ONLY a JSON array of exhibit numbers.
@@ -80,6 +82,7 @@ Return exactly 15 exhibit numbers that satisfy the benchmark requirements above.
 Follow the validation checklist before you answer.
 The JSON array order should be the recommended visiting order.
 Avoid orders that bounce between distant exhibit groups.
+Do not submit any answer that omits one of [1, 96, 97, 98, 99, 100].
 """
 
 response_selection = client.responses.create(
@@ -130,28 +133,35 @@ system_prompt_route = f"""
         - Never cross walls.
         - Never draw through exhibit markers or obstacle geometry.
         - Visit all selected exhibits and ignore unselected exhibits.
+        - Rule priority is: legality first, then correct entrance and exit placement, then required gallery coverage, then selected exhibit coverage, then compactness.
+        - Never violate a higher-priority rule to satisfy a lower-priority one.
 
         ### Visit definition
         - A selected exhibit counts as visited when the path comes within 183 pixels of that exhibit's numbered location.
         - Missing even one selected exhibit is a failure.
         - Missing a required gallery or region is a failure.
         - If a selected exhibit is near a restricted area or obstacle cluster, satisfy the visit from the nearest legal open-floor location instead of entering the risky area.
+        - If a selected exhibit would require entering restricted space or crossing a barrier, approach only as closely as the nearest legal open-floor position allows.
 
         ### Planning strategy
-        - First, silently identify a safe corridor skeleton from entrance to exit that stays legal.
-        - Second, follow the selected exhibit list in the order provided, unless a tiny local reorder is clearly safer.
-        - Third, attach short, legal detours from that skeleton to cover the selected exhibits.
-        - Fourth, convert the final walk into a single continuous polyline.
+        - First, silently identify all visible no-go areas: walls, restricted areas, restricted galleries, exhibit markers, and dead-end risky spaces.
+        - Second, build a safe corridor skeleton from entrance to exit that stays legal from start to finish.
+        - Third, use the selected exhibit list as the preferred visit order, but reorder when needed to preserve legality and reduce backtracking.
+        - Fourth, attach short, legal detours from that skeleton to cover the selected exhibits.
+        - Fifth, convert the final walk into a single continuous polyline.
         - If uncertain, choose the safer route instead of the shorter shortcut.
 
         ### Path construction rules
         - The path must be one continuous, physically plausible walking route.
         - Use a multi-point polyline with many waypoints, not a single point and not just 2 points.
-        - Return between 30 and 55 coordinate pairs.
+        - Return between 24 and 40 coordinate pairs.
         - Consecutive points should trace a sensible walking path through open floor space.
+        - Every straight segment between consecutive points must be directly drawable through legal open floor. If a straight segment would clip a wall, restricted area, restricted gallery, or exhibit marker, add another waypoint instead of cutting through.
         - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
         - Prefer orthogonal walking segments where practical, using diagonals only for short local adjustments in open floor space.
         - Favor open corridors and wider spaces over risky shortcuts near hazards.
+        - Maintain visible clearance from restricted-region borders and exhibit markers rather than skimming right along them.
+        - After the route reaches the exit, stop immediately. Do not overshoot the exit or hook around it.
 
         ### Coordinate constraints
         - Image width: {img_width} pixels
@@ -178,15 +188,16 @@ Remember:
 - the last point must be inside the exit,
 - keep the first and last points comfortably inside those boxes, not on their borders,
 - the path must include enough waypoints to show the full walk.
-- treat the selected exhibit list as the default visiting order,
+- treat the selected exhibit list as the preferred visiting order, but reorder when needed to stay legal,
 - Keep the route short and deliberate.
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
 - Before answering, silently verify that:
-  1. all selected exhibits are covered,
-  2. every must-see gallery is entered,
-  3. the first point is inside the entrance,
-  4. the last point is inside the exit.
+  1. every segment is legal and does not cut through a wall, restricted area, restricted gallery, or exhibit marker,
+  2. all selected exhibits are covered from legal open floor,
+  3. every must-see gallery is entered,
+  4. the first point is inside the entrance,
+  5. the last point is inside the exit.
 - if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
 """
 
