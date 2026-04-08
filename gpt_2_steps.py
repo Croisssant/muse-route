@@ -63,7 +63,6 @@ system_prompt_selection = f"""
     9. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
     10. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
     11. Prefer optional exhibits that can be covered by one or two compact clusters rather than optional exhibits scattered across many distant regions.
-    12. Prefer optional exhibits that appear reachable from open corridors or open floor, and avoid optional exhibits that seem to require edge-skimming past restricted areas, enclosed rooms, or dense obstacle pockets.
 
     Validation checklist before responding:
     1. [1, 96, 97, 98, 99, 100] are all present.
@@ -86,7 +85,6 @@ The JSON array order should be the recommended visiting order.
 Avoid orders that bounce between distant exhibit groups.
 Do not submit any answer that omits one of [1, 96, 97, 98, 99, 100].
 Prefer optional exhibits that let the route stay compact instead of visiting many separate clusters.
-Prefer optional exhibits that look corridor-accessible from legal open floor.
 """
 
 response_selection = client.responses.create(
@@ -146,6 +144,7 @@ system_prompt_route = f"""
         - Missing a required gallery or region is a failure.
         - If a selected exhibit is near a restricted area or obstacle cluster, satisfy the visit from the nearest legal open-floor location instead of entering the risky area.
         - If a selected exhibit would require entering restricted space or crossing a barrier, approach only as closely as the nearest legal open-floor position allows.
+        - A required gallery visit only needs legal entry into that gallery. Once the route has legally entered the required gallery, leave it again by the nearest legal continuation instead of wandering through adjacent interiors.
 
         ### Planning strategy
         - First, silently identify all visible no-go areas: walls, restricted areas, restricted galleries, exhibit markers, and dead-end risky spaces.
@@ -166,7 +165,7 @@ system_prompt_route = f"""
         - Prefer orthogonal walking segments where practical, using diagonals only for short local adjustments in open floor space.
         - Favor open corridors and wider spaces over risky shortcuts near hazards.
         - Maintain visible clearance from restricted-region borders and exhibit markers rather than skimming right along them.
-        - Prefer corridor-facing approaches to exhibits. Do not use the interior of an enclosed gallery or room as a shortcut unless that interior is clearly required and clearly legal.
+        - When satisfying a must-see gallery requirement, make the visit as shallow as possible: enter legally, cover the requirement, and exit without crossing into neighboring risky interiors.
         - After the route reaches the exit, stop immediately. Do not overshoot the exit or hook around it.
         - Avoid accidentally passing near large numbers of unselected exhibits. If many unselected exhibits would also be covered, the route is probably too broad and should be tightened.
 
@@ -200,7 +199,7 @@ Remember:
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
 - make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
-- when two legal approaches are possible, prefer the one that stays in open corridors instead of cutting through enclosed gallery interiors,
+- if a must-see gallery is close to restricted space, touch the legal portion you need and then leave immediately rather than traversing deeply through nearby gallery interiors,
 - trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
 - Before answering, silently verify that:
   1. every segment is legal and does not cut through a wall, restricted area, restricted gallery, or exhibit marker,
