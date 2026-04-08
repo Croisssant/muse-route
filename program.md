@@ -202,6 +202,41 @@ To calculate pass rates:
 - SCSR: count how many of {start_end_location: true, must_pass_regions: true, restricted_area_violations: false, distance_budget: true} are satisfied
 - SCAR: count how many of {specific_exhibit_coverage.valid: true, at_least_n_exhibits_coverage.valid: true, all exhibit_category_coverage[].valid: true} are satisfied
 
+## Anti-Overfitting Guidelines
+
+**CRITICAL**: All prompt modifications must be **layout-agnostic** and generalizable to ANY museum floor plan.
+
+### Forbidden Modifications (Layout-Specific)
+
+DO NOT introduce prompts that:
+
+- Reference specific exhibit numbers beyond those in `config.json` (e.g., "prefer exhibit 40 over 38")
+- Mention specific spatial features (e.g., "avoid the central island", "use left-side approach", "skip top-right room")
+- Name particular galleries by identifier unless they're semantically defined in `config.json`
+- Encode geometric patterns unique to the current test layout (e.g., "L-shaped corridor", "slanted cluster")
+- Suggest visit orders based on the current layout's topology
+
+### Allowed Modifications (Principle-Based)
+
+DO introduce prompts that:
+
+- Describe general spatial reasoning (e.g., "maintain clearance from obstacles", "prefer open corridors")
+- Define visit strategies by properties (e.g., "cluster nearby exhibits", "minimize backtracking")
+- Reference semantic constraints (e.g., "required exhibits", "restricted areas", "must-see galleries")
+- Emphasize validation requirements (e.g., "stay within floor area", "never cross walls")
+- Improve output format, structure, or reasoning processes
+
+### Pre-Commit Validation Checklist
+
+Before each `git commit`, verify:
+
+1. ✓ Does the prompt avoid mentioning specific exhibit numbers not in `config.json`?
+2. ✓ Does the prompt avoid referencing specific spatial features of the current layout?
+3. ✓ Would this prompt work on a completely different museum floor plan?
+4. ✓ Is the modification based on general principles rather than layout observation?
+
+If ANY answer is NO, reformulate the modification to be principle-based or discard it.
+
 ## The Experiment Loop
 
 The experiment runs on a dedicated branch (e.g. `prompt-opt/apr6`).
@@ -210,13 +245,14 @@ LOOP FOREVER:
 
 1. Look at the git state: the current branch/commit we're on
 2. Tune the prompts in `gpt_2_steps.py` with an experimental idea
-3. git commit with a descriptive message
-4. Run the experiment: `python gpt_2_steps.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
-5. Read the validation results: `cat validation_results.json` or parse specific fields
-6. If the script crashes, run `tail -n 50 run.log` to read the error and attempt a fix. If you can't fix after a few attempts, log as crash and move on
-7. Record the results in `results.tsv` (NOTE: do not commit results.tsv, leave it untracked by git)
-8. If validation improved (higher is_valid, lower total_violations, better pass rates), you "advance" the branch, keeping the git commit
-9. If validation is equal or worse, you git reset back to where you started
+3. **Self-review for overfitting**: Verify the modification passes the Pre-Commit Validation Checklist above. If it references layout-specific features, reformulate it as a general principle or discard it.
+4. git commit with a descriptive message
+5. Run the experiment: `python gpt_2_steps.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
+6. Read the validation results: `cat validation_results.json` or parse specific fields
+7. If the script crashes, run `tail -n 50 run.log` to read the error and attempt a fix. If you can't fix after a few attempts, log as crash and move on
+8. Record the results in `results.tsv` (NOTE: do not commit results.tsv, leave it untracked by git)
+9. If validation improved (higher is_valid, lower total_violations, better pass rates), you "advance" the branch, keeping the git commit
+10. If validation is equal or worse, you git reset back to where you started
 
 The idea is that you are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. You're advancing the branch so you can iterate. If you feel stuck, you can rewind but do this very sparingly.
 
@@ -241,4 +277,29 @@ Some ideas to try:
 9. **Context**: Provide more context about why constraints matter
 10. **Simplification**: Sometimes removing clutter makes instructions clearer
 
-Remember: The only way to know if a prompt change works is to test it. Theory doesn't matter — only measured results.
+### Good vs. Bad Examples (Anti-Overfitting)
+
+**Exhibit Selection:**
+
+- ❌ BAD (layout-specific): "Prefer exhibit 40 over exhibit 38 for better routing"
+- ✅ GOOD (principle-based): "Prefer exhibits that form spatial clusters to minimize route length"
+- ❌ BAD (layout-specific): "Always include the Persian exhibit group in the top-right"
+- ✅ GOOD (principle-based): "When multiple exhibits satisfy the user preference equally, prefer those closer to required exhibits"
+
+**Route Planning:**
+
+- ❌ BAD (layout-specific): "Avoid the central slanted island obstacle"
+- ✅ GOOD (principle-based): "Maintain clearance from exhibit clusters and obstacles"
+- ❌ BAD (layout-specific): "Approach the must-see gallery from the left side"
+- ✅ GOOD (principle-based): "Enter required galleries from the nearest open corridor"
+- ❌ BAD (layout-specific): "Follow the L-shaped main corridor"
+- ✅ GOOD (principle-based): "Prefer orthogonal paths along major corridors when available"
+
+**General Guidance:**
+
+- ❌ BAD (layout-specific): "Skip the top-right restricted room"
+- ✅ GOOD (principle-based): "Never enter areas marked as restricted in the gallery configuration"
+- ❌ BAD (layout-specific): "Visit exhibits in order: 1, 96, 40, 36, 99, 97, 100, 98..."
+- ✅ GOOD (principle-based): "Visit exhibits in an order that minimizes backtracking and follows a smooth spatial progression"
+
+Remember: The only way to know if a prompt change works is to test it. Theory doesn't matter — only measured results. **But all prompt changes must be generalizable to any museum layout.**
