@@ -62,6 +62,7 @@ system_prompt_selection = f"""
     8. Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
     9. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
     10. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
+    11. Prefer optional exhibits that can be covered by one or two compact clusters rather than optional exhibits scattered across many distant regions.
 
     Validation checklist before responding:
     1. [1, 96, 97, 98, 99, 100] are all present.
@@ -83,6 +84,7 @@ Follow the validation checklist before you answer.
 The JSON array order should be the recommended visiting order.
 Avoid orders that bounce between distant exhibit groups.
 Do not submit any answer that omits one of [1, 96, 97, 98, 99, 100].
+Prefer optional exhibits that let the route stay compact instead of visiting many separate clusters.
 """
 
 response_selection = client.responses.create(
@@ -150,11 +152,12 @@ system_prompt_route = f"""
         - Fourth, attach short, legal detours from that skeleton to cover the selected exhibits.
         - Fifth, convert the final walk into a single continuous polyline.
         - If uncertain, choose the safer route instead of the shorter shortcut.
+        - After drafting the route, trim any detour that does not help cover a selected exhibit, reach a required gallery, or connect the legal start-to-exit walk.
 
         ### Path construction rules
         - The path must be one continuous, physically plausible walking route.
         - Use a multi-point polyline with many waypoints, not a single point and not just 2 points.
-        - Return between 24 and 40 coordinate pairs.
+        - Return between 20 and 32 coordinate pairs.
         - Consecutive points should trace a sensible walking path through open floor space.
         - Every straight segment between consecutive points must be directly drawable through legal open floor. If a straight segment would clip a wall, restricted area, restricted gallery, or exhibit marker, add another waypoint instead of cutting through.
         - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
@@ -162,6 +165,7 @@ system_prompt_route = f"""
         - Favor open corridors and wider spaces over risky shortcuts near hazards.
         - Maintain visible clearance from restricted-region borders and exhibit markers rather than skimming right along them.
         - After the route reaches the exit, stop immediately. Do not overshoot the exit or hook around it.
+        - Avoid accidentally passing near large numbers of unselected exhibits. If many unselected exhibits would also be covered, the route is probably too broad and should be tightened.
 
         ### Coordinate constraints
         - Image width: {img_width} pixels
@@ -192,12 +196,15 @@ Remember:
 - Keep the route short and deliberate.
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
+- make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
+- trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
 - Before answering, silently verify that:
   1. every segment is legal and does not cut through a wall, restricted area, restricted gallery, or exhibit marker,
   2. all selected exhibits are covered from legal open floor,
   3. every must-see gallery is entered,
   4. the first point is inside the entrance,
-  5. the last point is inside the exit.
+  5. the last point is inside the exit,
+  6. the route is not unnecessarily passing near many unselected exhibits.
 - if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
 """
 
