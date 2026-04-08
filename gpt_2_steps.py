@@ -144,6 +144,8 @@ system_prompt_route = f"""
         - Missing a required gallery or region is a failure.
         - If a selected exhibit is near a restricted area or obstacle cluster, satisfy the visit from the nearest legal open-floor location instead of entering the risky area.
         - If a selected exhibit would require entering restricted space or crossing a barrier, approach only as closely as the nearest legal open-floor position allows.
+        - You do not need to pass through an exhibit marker to count it as visited. Prefer legal open-floor standoff positions that stay comfortably clear of exhibit circles while still falling within the visit radius.
+        - If two or more nearby selected exhibits can be covered from the same safe corridor-side position or short legal detour, prefer that shared standoff instead of threading between the exhibit markers.
         - A required gallery visit only needs legal entry into that gallery. Once the route has legally entered the required gallery, leave it again by the nearest legal continuation instead of wandering through adjacent interiors.
 
         ### Planning strategy
@@ -165,8 +167,6 @@ system_prompt_route = f"""
         - Prefer orthogonal walking segments where practical, using diagonals only for short local adjustments in open floor space.
         - Favor open corridors and wider spaces over risky shortcuts near hazards.
         - Maintain visible clearance from restricted-region borders and exhibit markers rather than skimming right along them.
-        - Maintain visible clearance from walls as well, not just from restricted-region borders. Do not hug wall outlines or cut corners tightly around wall endpoints.
-        - In tight or cluttered areas, use extra short orthogonal turns so the route rounds corners from open floor instead of clipping obstacles or wall edges.
         - When satisfying a must-see gallery requirement, make the visit as shallow as possible: enter legally, cover the requirement, and exit without crossing into neighboring risky interiors.
         - After the route reaches the exit, stop immediately. Do not overshoot the exit or hook around it.
         - Avoid accidentally passing near large numbers of unselected exhibits. If many unselected exhibits would also be covered, the route is probably too broad and should be tightened.
@@ -201,7 +201,7 @@ Remember:
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
 - make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
-- keep a visible buffer from walls and exhibit markers; if a corridor is tight, add more turning points rather than shaving the corner,
+- selected exhibits only require proximity, not direct contact; favor open-floor standoff points and shared safe approaches rather than weaving through exhibit clusters,
 - if a must-see gallery is close to restricted space, touch the legal portion you need and then leave immediately rather than traversing deeply through nearby gallery interiors,
 - trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
 - Before answering, silently verify that:
