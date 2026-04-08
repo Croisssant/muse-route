@@ -148,6 +148,7 @@ system_prompt_route = f"""
         ### Planning strategy
         - First, silently identify all visible no-go areas: walls, restricted areas, restricted galleries, exhibit markers, and dead-end risky spaces.
         - Second, build a safe corridor skeleton from entrance to exit that stays legal from start to finish.
+        - Any skeleton that crosses an enclosed room boundary, enters a restricted gallery, or depends on a questionable doorway is invalid and must be replaced with a clearly legal alternative.
         - Third, use the selected exhibit list as the preferred visit order, but reorder when needed to preserve legality and reduce backtracking.
         - Fourth, attach short, legal detours from that skeleton to cover the selected exhibits.
         - Fifth, convert the final walk into a single continuous polyline.
@@ -160,12 +161,14 @@ system_prompt_route = f"""
         - Return between 20 and 32 coordinate pairs.
         - Consecutive points should trace a sensible walking path through open floor space.
         - Every straight segment between consecutive points must be directly drawable through legal open floor. If a straight segment would clip a wall, restricted area, restricted gallery, or exhibit marker, add another waypoint instead of cutting through.
+        - Do not use a single long segment to bridge across a room, gallery, or blocked zone. When going around barriers, use multiple short corridor-following turns instead.
         - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
         - Prefer orthogonal walking segments where practical, using diagonals only for short local adjustments in open floor space.
         - Favor open corridors and wider spaces over risky shortcuts near hazards.
         - Maintain visible clearance from restricted-region borders and exhibit markers rather than skimming right along them.
         - After the route reaches the exit, stop immediately. Do not overshoot the exit or hook around it.
         - Avoid accidentally passing near large numbers of unselected exhibits. If many unselected exhibits would also be covered, the route is probably too broad and should be tightened.
+        - Use an explicit entrance approach and exit approach: the first point should be clearly inside the entrance, the second point should still reflect a legal departure from that box, the penultimate point should approach the exit from legal open floor, and the last point should be clearly inside the exit.
 
         ### Coordinate constraints
         - Image width: {img_width} pixels
@@ -197,14 +200,16 @@ Remember:
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
 - make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
+- use a deliberate start sequence and end sequence so the route clearly departs from the entrance and clearly arrives into the exit without clipping the box borders,
 - trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
 - Before answering, silently verify that:
   1. every segment is legal and does not cut through a wall, restricted area, restricted gallery, or exhibit marker,
   2. all selected exhibits are covered from legal open floor,
   3. every must-see gallery is entered,
-  4. the first point is inside the entrance,
-  5. the last point is inside the exit,
-  6. the route is not unnecessarily passing near many unselected exhibits.
+  4. the first point is clearly inside the entrance with margin from the border,
+  5. the last point is clearly inside the exit with margin from the border,
+  6. the first two points and last two points form a legal approach rather than a clipped border touch,
+  7. the route is not unnecessarily passing near many unselected exhibits.
 - if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
 """
 
