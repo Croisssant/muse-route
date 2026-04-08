@@ -558,7 +558,7 @@ class RouteExtractor:
 
         return skel
 
-    def _find_route_endpoints(self, final_mask, connectivity, debug=False, prune_iter=10):
+    def _find_route_endpoints(self, final_mask, connectivity, debug=False, prune_iter=7):
         result = {'start': None, 'end': None}
 
         if debug:
