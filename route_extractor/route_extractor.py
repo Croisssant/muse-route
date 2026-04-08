@@ -65,6 +65,36 @@ class RouteExtractor:
     def _rect_corners(self, coords):
         x, y, w, h = coords['x'], coords['y'], coords['width'], coords['height']
         return np.array([[x, y], [x+w, y], [x+w, y+h], [x, y+h]], dtype=np.float32)
+    
+    def _polygon_corners(self, coords):
+        """Extract corners from polygon coordinates."""
+        points = coords['points']
+        return np.array([[p['x'], p['y']] for p in points], dtype=np.float32)
+    
+    def _shape_corners(self, shape_data):
+        """Extract corners from either rectangle or polygon shape."""
+        shape = shape_data.get('shape', 'rectangle')
+        coords = shape_data['coordinates']
+        if shape == 'rectangle':
+            return self._rect_corners(coords)
+        elif shape == 'polygon':
+            return self._polygon_corners(coords)
+        else:
+            raise ValueError(f"Unsupported shape: {shape}")
+    
+    def _shape_center(self, shape_data):
+        """Calculate center point for either rectangle or polygon shape."""
+        shape = shape_data.get('shape', 'rectangle')
+        coords = shape_data['coordinates']
+        if shape == 'rectangle':
+            return (coords['x'] + coords['width']/2, coords['y'] + coords['height']/2)
+        elif shape == 'polygon':
+            points = coords['points']
+            cx = sum(p['x'] for p in points) / len(points)
+            cy = sum(p['y'] for p in points) / len(points)
+            return (cx, cy)
+        else:
+            raise ValueError(f"Unsupported shape: {shape}")
 
     def _annotation_circles(self):
         """Return list of (cx, cy, r) from exhibit annotations."""
@@ -152,24 +182,39 @@ class RouteExtractor:
         """
         Return (detected_corners, annotated_corners) from entrance+exit box detection, or (None, None).
         detected_corners are corners in the route image; annotated_corners are annotation-space corners.
+        
+        Handles mixed scenarios: if one is polygon and one is rectangle, uses only the rectangle for alignment.
         """
         if not (self.entrances and self.exits):
             return None, None
         entrance_ann = self.entrances[0]
         exit_ann     = self.exits[0]
-        if entrance_ann['shape'] != 'rectangle' or exit_ann['shape'] != 'rectangle':
-            return None, None
-
-        detected_entrance_corners = self._detect_colored_box(route_img_bgr, 'green')
-        detected_exit_corners = self._detect_colored_box(route_img_bgr, 'yellow')
-        annotated_entrance_corners = self._rect_corners(entrance_ann['coordinates'])
-        annotated_exit_corners = self._rect_corners(exit_ann['coordinates'])
+        
+        entrance_shape = entrance_ann.get('shape', 'rectangle')
+        exit_shape = exit_ann.get('shape', 'rectangle')
 
         detected_corners, annotated_corners = [], []
-        if detected_entrance_corners is not None:
-            detected_corners.append(detected_entrance_corners);  annotated_corners.append(annotated_entrance_corners)
-        if detected_exit_corners is not None:
-            detected_corners.append(detected_exit_corners);  annotated_corners.append(annotated_exit_corners)
+        
+        # Try entrance box (only if rectangle)
+        if entrance_shape == 'rectangle':
+            detected_entrance_corners = self._detect_colored_box(route_img_bgr, 'green')
+            if detected_entrance_corners is not None:
+                annotated_entrance_corners = self._rect_corners(entrance_ann['coordinates'])
+                detected_corners.append(detected_entrance_corners)
+                annotated_corners.append(annotated_entrance_corners)
+        else:
+            print("  [Alignment] Skipping entrance box (polygon shape - would cause mismatch)")
+        
+        # Try exit box (only if rectangle)
+        if exit_shape == 'rectangle':
+            detected_exit_corners = self._detect_colored_box(route_img_bgr, 'yellow')
+            if detected_exit_corners is not None:
+                annotated_exit_corners = self._rect_corners(exit_ann['coordinates'])
+                detected_corners.append(detected_exit_corners)
+                annotated_corners.append(annotated_exit_corners)
+        else:
+            print("  [Alignment] Skipping exit box (polygon shape - would cause mismatch)")
+        
         if not detected_corners:
             return None, None
 
@@ -346,8 +391,15 @@ class RouteExtractor:
                 inliers = int(mask.sum()) if mask is not None else len(all_src)
                 n_circ  = len(src_circ) if src_circ is not None else 0
                 n_box   = len(src_box)  if src_box  is not None else 0
-                method  = ('circles+boxes' if n_circ >= MIN_CIRCLE_MATCHES
-                           else 'boxes')
+                
+                # Determine alignment method based on what was actually used
+                if n_circ >= MIN_CIRCLE_MATCHES and n_box > 0:
+                    method = 'circles+boxes'
+                elif n_box > 0:
+                    method = 'boxes-only'
+                else:
+                    method = 'circles-only'
+                
                 print(f"  ✅ Final homography: {inliers}/{len(all_src)} inliers "
                       f"({n_circ} circles + {n_box} box pts) [{method}]")
                 aligned = cv2.warpPerspective(
@@ -582,9 +634,8 @@ class RouteExtractor:
         print(f"  Endpoints detected: {len(endpoint_list)}")
         
         # Select START: endpoint closest to entrance center
-        if endpoint_list and self.entrances and self.entrances[0]['shape'] == 'rectangle':
-            ec = self.entrances[0]['coordinates']
-            e_center = (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2)
+        if endpoint_list and self.entrances:
+            e_center = self._shape_center(self.entrances[0])
             
             # Find closest endpoint to entrance
             start_endpoint = min(endpoint_list, key=lambda ep: self._distance(ep, e_center))
@@ -623,9 +674,8 @@ class RouteExtractor:
             else:
                 print(f"  Using closest to Exit Box method")
                 # Select END: endpoint closest to exit center (excluding START)
-                if endpoint_list and self.exits and self.exits[0]['shape'] == 'rectangle':
-                    xc = self.exits[0]['coordinates']
-                    x_center = (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2)
+                if endpoint_list and self.exits:
+                    x_center = self._shape_center(self.exits[0])
                     
                     # Find closest endpoint to exit 
                     if remaining_endpoints:
@@ -1324,7 +1374,8 @@ class RouteExtractor:
 
         # ── Entrance boxes (green) ────────────────────────────────────
         for entrance in self.entrances:
-            if entrance['shape'] == 'rectangle':
+            shape = entrance.get('shape', 'rectangle')
+            if shape == 'rectangle':
                 c = entrance['coordinates']
                 cv2.rectangle(vis_img,
                               (sx(c['x']),              sx(c['y'])),
@@ -1333,10 +1384,22 @@ class RouteExtractor:
                 cv2.putText(vis_img, "ENTRANCE",
                             (sx(c['x']) + 5, sx(c['y']) - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            elif shape == 'polygon':
+                pts = entrance['coordinates']['points']
+                arr = np.array([[sx(p['x']), sx(p['y'])] for p in pts],
+                               dtype=np.int32).reshape(-1, 1, 2)
+                cv2.polylines(vis_img, [arr], isClosed=True, color=(0, 255, 0), thickness=2)
+                # Calculate center for label
+                center_x = sum(p['x'] for p in pts) / len(pts)
+                center_y = sum(p['y'] for p in pts) / len(pts)
+                cv2.putText(vis_img, "ENTRANCE",
+                            (sx(center_x) - 30, sx(center_y) - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         # ── Exit boxes (yellow) ───────────────────────────────────────
         for exit_ann in self.exits:
-            if exit_ann['shape'] == 'rectangle':
+            shape = exit_ann.get('shape', 'rectangle')
+            if shape == 'rectangle':
                 c = exit_ann['coordinates']
                 cv2.rectangle(vis_img,
                               (sx(c['x']),              sx(c['y'])),
@@ -1344,6 +1407,17 @@ class RouteExtractor:
                               (255, 255, 0), 2)
                 cv2.putText(vis_img, "EXIT",
                             (sx(c['x']) + 5, sx(c['y']) - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+            elif shape == 'polygon':
+                pts = exit_ann['coordinates']['points']
+                arr = np.array([[sx(p['x']), sx(p['y'])] for p in pts],
+                               dtype=np.int32).reshape(-1, 1, 2)
+                cv2.polylines(vis_img, [arr], isClosed=True, color=(255, 255, 0), thickness=2)
+                # Calculate center for label
+                center_x = sum(p['x'] for p in pts) / len(pts)
+                center_y = sum(p['y'] for p in pts) / len(pts)
+                cv2.putText(vis_img, "EXIT",
+                            (sx(center_x) - 15, sx(center_y) - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 
         # ── START / END endpoint markers ──────────────────────────────

@@ -324,18 +324,38 @@ class SpatialValidator:
             print(f"  ❌ No START point detected")
         else:
             # Check if START is actually inside entrance box
-            if self.entrances and self.entrances[0]['shape'] == 'rectangle':
-                ec = self.entrances[0]['coordinates']
-                if self.point_in_rectangle(endpoints['start'], ec):
-                    print(f"  ✅ START {endpoints['start']} is inside entrance box")
+            if self.entrances:
+                entrance = self.entrances[0]
+                shape = entrance.get('shape', 'rectangle')
+                
+                if shape == 'rectangle':
+                    ec = entrance['coordinates']
+                    if self.point_in_rectangle(endpoints['start'], ec):
+                        print(f"  ✅ START {endpoints['start']} is inside entrance box")
+                    else:
+                        violations['entrance_violations'].append({
+                            'point': endpoints['start'],
+                            'reason': 'START point is outside entrance bounding box'
+                        })
+                        dist_to_entrance = self._distance(endpoints['start'], 
+                                                         (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2))
+                        print(f"  ❌ START {endpoints['start']} is outside entrance box (distance: {dist_to_entrance:.1f} px)")
+                elif shape == 'polygon':
+                    polygon_points = [(p['x'], p['y']) for p in entrance['coordinates']['points']]
+                    if self.point_in_polygon(endpoints['start'], polygon_points):
+                        print(f"  ✅ START {endpoints['start']} is inside entrance polygon")
+                    else:
+                        violations['entrance_violations'].append({
+                            'point': endpoints['start'],
+                            'reason': 'START point is outside entrance polygon'
+                        })
+                        # Calculate center of polygon for distance
+                        center_x = sum(p[0] for p in polygon_points) / len(polygon_points)
+                        center_y = sum(p[1] for p in polygon_points) / len(polygon_points)
+                        dist_to_entrance = self._distance(endpoints['start'], (center_x, center_y))
+                        print(f"  ❌ START {endpoints['start']} is outside entrance polygon (distance: {dist_to_entrance:.1f} px)")
                 else:
-                    violations['entrance_violations'].append({
-                        'point': endpoints['start'],
-                        'reason': 'START point is outside entrance bounding box'
-                    })
-                    dist_to_entrance = self._distance(endpoints['start'], 
-                                                     (ec['x'] + ec['width']/2, ec['y'] + ec['height']/2))
-                    print(f"  ❌ START {endpoints['start']} is outside entrance box (distance: {dist_to_entrance:.1f} px)")
+                    print(f"  ⚠️ Unsupported entrance shape: {shape}")
             else:
                 print(f"  ⚠️ No entrance box defined for validation")
         
@@ -348,18 +368,38 @@ class SpatialValidator:
             print(f"  ❌ No END point detected")
         else:
             # Check if END is actually inside exit box
-            if self.exits and self.exits[0]['shape'] == 'rectangle':
-                xc = self.exits[0]['coordinates']
-                if self.point_in_rectangle(endpoints['end'], xc):
-                    print(f"  ✅ END {endpoints['end']} is inside exit box")
+            if self.exits:
+                exit_shape = self.exits[0]
+                shape = exit_shape.get('shape', 'rectangle')
+                
+                if shape == 'rectangle':
+                    xc = exit_shape['coordinates']
+                    if self.point_in_rectangle(endpoints['end'], xc):
+                        print(f"  ✅ END {endpoints['end']} is inside exit box")
+                    else:
+                        violations['exit_violations'].append({
+                            'point': endpoints['end'],
+                            'reason': 'END point is outside exit bounding box'
+                        })
+                        dist_to_exit = self._distance(endpoints['end'], 
+                                                      (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2))
+                        print(f"  ❌ END {endpoints['end']} is outside exit box (distance: {dist_to_exit:.1f} px)")
+                elif shape == 'polygon':
+                    polygon_points = [(p['x'], p['y']) for p in exit_shape['coordinates']['points']]
+                    if self.point_in_polygon(endpoints['end'], polygon_points):
+                        print(f"  ✅ END {endpoints['end']} is inside exit polygon")
+                    else:
+                        violations['exit_violations'].append({
+                            'point': endpoints['end'],
+                            'reason': 'END point is outside exit polygon'
+                        })
+                        # Calculate center of polygon for distance
+                        center_x = sum(p[0] for p in polygon_points) / len(polygon_points)
+                        center_y = sum(p[1] for p in polygon_points) / len(polygon_points)
+                        dist_to_exit = self._distance(endpoints['end'], (center_x, center_y))
+                        print(f"  ❌ END {endpoints['end']} is outside exit polygon (distance: {dist_to_exit:.1f} px)")
                 else:
-                    violations['exit_violations'].append({
-                        'point': endpoints['end'],
-                        'reason': 'END point is outside exit bounding box'
-                    })
-                    dist_to_exit = self._distance(endpoints['end'], 
-                                                  (xc['x'] + xc['width']/2, xc['y'] + xc['height']/2))
-                    print(f"  ❌ END {endpoints['end']} is outside exit box (distance: {dist_to_exit:.1f} px)")
+                    print(f"  ⚠️ Unsupported exit shape: {shape}")
             else:
                 print(f"  ⚠️ No exit box defined for validation")
         

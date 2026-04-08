@@ -93,7 +93,29 @@ def convert_via_to_museum_layout(via_json_path, output_path):
                 'area': None
             }
             
-            if entity_type == '0':  # Wall
+            # Check if this is an entrance or exit (entity type 3 or 4)
+            # For 4-point polylines, keep as polygon to preserve rotation
+            if entity_type in ['3', '4'] and len(points) == 4:
+                polygon_data = {
+                    'id': annotation_id,
+                    'annotation_number': None,  # Will be set based on type
+                    'shape': 'polygon',
+                    'coordinates': {
+                        'points': points,
+                        'num_points': len(points)
+                    },
+                    'area': None  # Could calculate polygon area if needed
+                }
+                
+                if entity_type == '3':  # Entrance
+                    polygon_data['annotation_number'] = len(entrances) + 1
+                    entrances.append(polygon_data)
+                    print(f"✓ Entrance: polygon with {len(points)} points")
+                elif entity_type == '4':  # Exit
+                    polygon_data['annotation_number'] = len(exits) + 1
+                    exits.append(polygon_data)
+                    print(f"✓ Exit: polygon with {len(points)} points")
+            elif entity_type == '0':  # Wall
                 walls.append(polyline_data)
                 print(f"✓ Wall: {len(points)} points")
             elif entity_type == '1':  # Gallery

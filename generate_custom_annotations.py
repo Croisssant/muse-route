@@ -43,10 +43,12 @@ def generate_annotated_image(image_path, annotations_data, annotation_types, out
     try:
         font = ImageFont.truetype("arial.ttf", 16)
         font_small = ImageFont.truetype("arial.ttf", 12)
+        font_exhibit = ImageFont.truetype("arial.ttf", 22)
         font_legend = ImageFont.truetype("arial.ttf", 14)
     except:
         font = ImageFont.load_default()
         font_small = ImageFont.load_default()
+        font_exhibit = ImageFont.load_default()
         font_legend = ImageFont.load_default()
     
     # Color scheme (same as existing scripts)
@@ -54,7 +56,7 @@ def generate_annotated_image(image_path, annotations_data, annotation_types, out
         'wall': (0, 0, 255, 255),        # Blue - opaque
         'room': (255, 165, 0, 255),      # Orange - opaque (deprecated)
         'gallery': (128, 0, 128, 100),   # 
-        'exhibit': (255, 0, 0, 200),     # Red - semi-transparent
+        'exhibit': (60, 60, 60, 255),     # 
         'entrance': (0, 255, 0, 200),    # Green - semi-transparent
         'exit': (255, 255, 0, 200),      # Yellow - semi-transparent
         'floor_area': (128, 128, 255, 50), # Light blue - very transparent
@@ -155,34 +157,61 @@ def generate_annotated_image(image_path, annotations_data, annotation_types, out
             print(f"✓ Drawing {len(entrances)} entrance(s)...")
             drawn_types.append('entrance')
             for entrance in entrances:
+                shape = entrance.get('shape', 'rectangle')
                 coords = entrance['coordinates']
-                x, y, width, height = coords['x'], coords['y'], coords['width'], coords['height']
                 
-                # Draw rectangle
-                draw.rectangle(
-                    [x, y, x + width, y + height],
-                    fill=colors['entrance'],
-                    outline=(0, 200, 0, 255),
-                    width=4
-                )
-                
-                # Add label with background only if labels_mode == 2 (all labels)
-                if labels_mode == 2:
-                    label = "ENTRANCE"
-                    bbox = draw.textbbox((0, 0), label, font=font)
-                    text_width = bbox[2] - bbox[0]
-                    text_height = bbox[3] - bbox[1]
+                if shape == 'polygon':
+                    # Handle polygon shape (rotated rectangles)
+                    points = [(p['x'], p['y']) for p in coords['points']]
+                    draw.polygon(points, fill=colors['entrance'], outline=(0, 200, 0, 255))
                     
-                    label_x = x + (width - text_width) // 2
-                    label_y = y + (height - text_height) // 2
+                    # Calculate center for label
+                    if labels_mode == 2:
+                        center_x = sum(p[0] for p in points) / len(points)
+                        center_y = sum(p[1] for p in points) / len(points)
+                        label = "ENTRANCE"
+                        bbox = draw.textbbox((0, 0), label, font=font)
+                        text_width = bbox[2] - bbox[0]
+                        text_height = bbox[3] - bbox[1]
+                        label_x = center_x - text_width // 2
+                        label_y = center_y - text_height // 2
+                        
+                        # Draw text background
+                        draw.rectangle(
+                            [label_x - 5, label_y - 2, label_x + text_width + 5, label_y + text_height + 2],
+                            fill=(0, 150, 0, 255)
+                        )
+                        # Draw text
+                        draw.text((label_x, label_y), label, fill=(255, 255, 255, 255), font=font)
+                else:
+                    # Handle rectangle shape (default)
+                    x, y, width, height = coords['x'], coords['y'], coords['width'], coords['height']
                     
-                    # Draw text background
+                    # Draw rectangle
                     draw.rectangle(
-                        [label_x - 5, label_y - 2, label_x + text_width + 5, label_y + text_height + 2],
-                        fill=(0, 150, 0, 255)
+                        [x, y, x + width, y + height],
+                        fill=colors['entrance'],
+                        outline=(0, 200, 0, 255),
+                        width=4
                     )
-                    # Draw text
-                    draw.text((label_x, label_y), label, fill=(255, 255, 255, 255), font=font)
+                    
+                    # Add label with background only if labels_mode == 2 (all labels)
+                    if labels_mode == 2:
+                        label = "ENTRANCE"
+                        bbox = draw.textbbox((0, 0), label, font=font)
+                        text_width = bbox[2] - bbox[0]
+                        text_height = bbox[3] - bbox[1]
+                        
+                        label_x = x + (width - text_width) // 2
+                        label_y = y + (height - text_height) // 2
+                        
+                        # Draw text background
+                        draw.rectangle(
+                            [label_x - 5, label_y - 2, label_x + text_width + 5, label_y + text_height + 2],
+                            fill=(0, 150, 0, 255)
+                        )
+                        # Draw text
+                        draw.text((label_x, label_y), label, fill=(255, 255, 255, 255), font=font)
     
     # Draw exits
     if 'exit' in annotation_types or 'exits' in annotation_types:
@@ -191,34 +220,61 @@ def generate_annotated_image(image_path, annotations_data, annotation_types, out
             print(f"✓ Drawing {len(exits)} exit(s)...")
             drawn_types.append('exit')
             for exit_ann in exits:
+                shape = exit_ann.get('shape', 'rectangle')
                 coords = exit_ann['coordinates']
-                x, y, width, height = coords['x'], coords['y'], coords['width'], coords['height']
                 
-                # Draw rectangle
-                draw.rectangle(
-                    [x, y, x + width, y + height],
-                    fill=colors['exit'],
-                    outline=(200, 200, 0, 255),
-                    width=4
-                )
-                
-                # Add label with background only if labels_mode == 2 (all labels)
-                if labels_mode == 2:
-                    label = "EXIT"
-                    bbox = draw.textbbox((0, 0), label, font=font)
-                    text_width = bbox[2] - bbox[0]
-                    text_height = bbox[3] - bbox[1]
+                if shape == 'polygon':
+                    # Handle polygon shape (rotated rectangles)
+                    points = [(p['x'], p['y']) for p in coords['points']]
+                    draw.polygon(points, fill=colors['exit'], outline=(200, 200, 0, 255))
                     
-                    label_x = x + (width - text_width) // 2
-                    label_y = y + (height - text_height) // 2
+                    # Calculate center for label
+                    if labels_mode == 2:
+                        center_x = sum(p[0] for p in points) / len(points)
+                        center_y = sum(p[1] for p in points) / len(points)
+                        label = "EXIT"
+                        bbox = draw.textbbox((0, 0), label, font=font)
+                        text_width = bbox[2] - bbox[0]
+                        text_height = bbox[3] - bbox[1]
+                        label_x = center_x - text_width // 2
+                        label_y = center_y - text_height // 2
+                        
+                        # Draw text background
+                        draw.rectangle(
+                            [label_x - 5, label_y - 2, label_x + text_width + 5, label_y + text_height + 2],
+                            fill=(150, 150, 0, 255)
+                        )
+                        # Draw text
+                        draw.text((label_x, label_y), label, fill=(255, 255, 255, 255), font=font)
+                else:
+                    # Handle rectangle shape (default)
+                    x, y, width, height = coords['x'], coords['y'], coords['width'], coords['height']
                     
-                    # Draw text background
+                    # Draw rectangle
                     draw.rectangle(
-                        [label_x - 5, label_y - 2, label_x + text_width + 5, label_y + text_height + 2],
-                        fill=(150, 150, 0, 255)
+                        [x, y, x + width, y + height],
+                        fill=colors['exit'],
+                        outline=(200, 200, 0, 255),
+                        width=4
                     )
-                    # Draw text
-                    draw.text((label_x, label_y), label, fill=(255, 255, 255, 255), font=font)
+                    
+                    # Add label with background only if labels_mode == 2 (all labels)
+                    if labels_mode == 2:
+                        label = "EXIT"
+                        bbox = draw.textbbox((0, 0), label, font=font)
+                        text_width = bbox[2] - bbox[0]
+                        text_height = bbox[3] - bbox[1]
+                        
+                        label_x = x + (width - text_width) // 2
+                        label_y = y + (height - text_height) // 2
+                        
+                        # Draw text background
+                        draw.rectangle(
+                            [label_x - 5, label_y - 2, label_x + text_width + 5, label_y + text_height + 2],
+                            fill=(150, 150, 0, 255)
+                        )
+                        # Draw text
+                        draw.text((label_x, label_y), label, fill=(255, 255, 255, 255), font=font)
     
     # Draw exhibits (circles)
     if 'exhibit' in annotation_types or 'exhibits' in annotation_types:
@@ -234,13 +290,22 @@ def generate_annotated_image(image_path, annotations_data, annotation_types, out
                 draw.ellipse(
                     [cx - r, cy - r, cx + r, cy + r],
                     fill=colors['exhibit'],
-                    outline=(200, 0, 0, 255),
+                    outline=(60, 60, 60, 255),
                     width=2
                 )
                 
-                # Add exhibit number
+                # Add exhibit number (centered)
                 exhibit_num = exhibit.get('exhibit_number', '?')
-                draw.text((cx - 5, cy - 5), str(exhibit_num), fill=(255, 255, 255, 255), font=font_small)
+                text = str(exhibit_num)
+                bbox = draw.textbbox((0, 0), text, font=font_exhibit)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                
+                # Center the text in the circle
+                text_x = cx - text_width / 2
+                text_y = cy - text_height / 2
+                
+                draw.text((text_x, text_y), text, fill=(255, 255, 255, 255), font=font_exhibit)
     
     # Draw forbidden areas
     if 'forbidden_area' in annotation_types or 'forbidden_areas' in annotation_types:
