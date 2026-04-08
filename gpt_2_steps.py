@@ -211,6 +211,7 @@ system_prompt_route = f"""
         - Maintain visible clearance from restricted-region borders and exhibit markers rather than skimming right along them.
         - When satisfying a must-see gallery requirement, make the visit as shallow as possible: enter legally, cover the requirement, and exit without crossing into neighboring risky interiors.
         - After the route reaches the exit, stop immediately. Do not overshoot the exit or hook around it.
+        - Reserve a short final approach into the exit: the penultimate point should approach from legal open floor near the exit, and the last point must land clearly inside the yellow exit box rather than stopping in a nearby corridor.
         - Avoid accidentally passing near large numbers of unselected exhibits. If many unselected exhibits would also be covered, the route is probably too broad and should be tightened.
 
         ### Coordinate constraints
@@ -243,6 +244,7 @@ Remember:
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
 - make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
+- use a short final approach so the route does not stop just outside the yellow exit box,
 - if a must-see gallery is close to restricted space, touch the legal portion you need and then leave immediately rather than traversing deeply through nearby gallery interiors,
 - trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
 - Before answering, silently verify that:
@@ -250,7 +252,7 @@ Remember:
   2. all selected exhibits are covered from legal open floor,
   3. every must-see gallery is entered,
   4. the first point is inside the entrance,
-  5. the last point is inside the exit,
+  5. the last point is clearly inside the exit and not merely adjacent to it,
   6. the route is not unnecessarily passing near many unselected exhibits.
 - if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
 """
