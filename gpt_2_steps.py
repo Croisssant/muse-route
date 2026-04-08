@@ -20,13 +20,57 @@ load_dotenv(override=True)
 client = OpenAI()
 
 # -------- File paths --------
+config_path = "./config.json"
 input_image_path = "./images/annotated_walls_museum_layout_02/original_images/annotated_walls_museum_layout_02.png"
 output_image_path = "./images/annotated_walls_museum_layout_02/route_images/chatgpt_route_2.png"
 exhibits_json_path = "./original_floorplans/museum_layout_01/exhibit_list.json"
+annotations_json_path = "./original_floorplans/museum_layout_01/museum_layout_annotations.json"
 
 # -------- Load exhibit JSON --------
 with open(exhibits_json_path, "r", encoding="utf-8") as f:
     exhibits_json = json.load(f)
+
+with open(config_path, "r", encoding="utf-8") as f:
+    configs = json.load(f)
+
+with open(annotations_json_path, "r", encoding="utf-8") as f:
+    annotations_json = json.load(f)
+
+required_exhibit_ids = configs.get("specific_exhibit_to_cover", [])
+required_exhibit_ids_json = json.dumps(required_exhibit_ids)
+required_exhibit_count = len(required_exhibit_ids)
+
+required_categories = configs.get("exhibit_categories_to_cover", [])
+required_categories_json = json.dumps(required_categories)
+
+min_exhibits_to_cover = configs.get("at_least_n_exhibits_to_cover", required_exhibit_count)
+selection_target_count = max(min_exhibits_to_cover, required_exhibit_count)
+
+visit_distance_mm = configs.get("exhibit_see_distance_in_mm")
+distance_entries = annotations_json.get("distance_in_mm", [])
+mm_per_px = distance_entries[0].get("mm_per_px") if distance_entries else None
+visit_distance_px = int(round(visit_distance_mm / mm_per_px)) if visit_distance_mm and mm_per_px else None
+visit_distance_text = (
+    f"{visit_distance_px} pixels"
+    if visit_distance_px is not None
+    else f"the configured visit radius derived from {visit_distance_mm} mm"
+)
+
+required_category_requirement = (
+    f"    3. The final route must include at least one exhibit from each required category in {required_categories_json}.\n"
+    if required_categories
+    else "    3. There are no required exhibit categories configured for this run.\n"
+)
+required_category_checklist = (
+    f"    2. At least one exhibit from each required category in {required_categories_json} is present.\n"
+    if required_categories
+    else "    2. There are no required exhibit-category checks for this run.\n"
+)
+required_category_prompt_line = (
+    f"Ensure the selection covers each required category in {required_categories_json}.\n"
+    if required_categories
+    else ""
+)
 
 # -------- Image info --------
 image = Image.open(input_image_path)
@@ -47,26 +91,29 @@ system_prompt_selection = f"""
     {exhibits_json}
 
     Hard benchmark requirements that override user preference when there is any conflict:
-    1. The final route must include exhibit numbers [1, 96, 97, 98, 99, 100].
-    2. The final route must cover at least 15 exhibits total.
-    3. The final route must include at least one Roman exhibit.
+    1. The final route must include exhibit numbers {required_exhibit_ids_json}.
+    2. The final route must cover at least {min_exhibits_to_cover} exhibits total.
+    {required_category_requirement}
 
     Selection process:
-    1. Start by including every hard-required exhibit.
-    2. Add additional exhibits until there are exactly 15 unique exhibit numbers.
+    1. Start by locking in every hard-required exhibit {required_exhibit_ids_json}. These required exhibits are mandatory and cannot be removed.
+    2. Add additional exhibits until there are exactly {selection_target_count} unique exhibit numbers.
     3. Strongly prefer exhibits that match the user preference.
-    4. Avoid redundant choices when several exhibits satisfy the same preference equally well.
-    5. If there is uncertainty, prefer a conservative set that is easier to route compactly rather than a sprawling set.
-    6. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
-    7. Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
-    8. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
-    9. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
+    4. When several exhibits satisfy the preference equally well, prefer the subset that forms a compact visit plan with less backtracking and fewer long jumps.
+    5. Avoid redundant choices that spread the route across distant regions when a more compact preference-matching option exists.
+    6. If there is uncertainty, prefer a conservative set that is easier to route legally and compactly rather than a sprawling set.
+    7. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
+    8. Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
+    9. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
+    10. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
+    11. Prefer optional exhibits that can be covered by one or two compact clusters rather than optional exhibits scattered across many distant regions.
 
     Validation checklist before responding:
-    1. [1, 96, 97, 98, 99, 100] are all present.
-    2. At least one Roman exhibit is present.
-    3. The list contains exactly 15 unique integers.
+    1. {required_exhibit_ids_json} are all present.
+    {required_category_checklist}    
+    3. The list contains exactly {selection_target_count} unique integers.
     4. The order should represent a plausible visit order, not a random order.
+    5. If any required exhibit is missing, replace optional exhibits until all required exhibits are present before responding.
 
     Output rules:
     1. Output ONLY a JSON array of exhibit numbers.
@@ -76,10 +123,13 @@ system_prompt_selection = f"""
 user_prompt_selection = f"""
 User preference: {user_preference}
 
-Return exactly 15 exhibit numbers that satisfy the benchmark requirements above.
+Return exactly {selection_target_count} exhibit numbers that satisfy the benchmark requirements above.
 Follow the validation checklist before you answer.
 The JSON array order should be the recommended visiting order.
 Avoid orders that bounce between distant exhibit groups.
+Do not submit any answer that omits one of {required_exhibit_ids_json}.
+Prefer optional exhibits that let the route stay compact instead of visiting many separate clusters.
+{required_category_prompt_line}The JSON array should remain valid even if the config values change in a future run.
 """
 
 response_selection = client.responses.create(
@@ -130,28 +180,39 @@ system_prompt_route = f"""
         - Never cross walls.
         - Never draw through exhibit markers or obstacle geometry.
         - Visit all selected exhibits and ignore unselected exhibits.
+        - Rule priority is: legality first, then correct entrance and exit placement, then required gallery coverage, then selected exhibit coverage, then compactness.
+        - Never violate a higher-priority rule to satisfy a lower-priority one.
 
         ### Visit definition
-        - A selected exhibit counts as visited when the path comes within 183 pixels of that exhibit's numbered location.
+        - A selected exhibit counts as visited when the path comes within {visit_distance_text} of that exhibit's numbered location.
         - Missing even one selected exhibit is a failure.
         - Missing a required gallery or region is a failure.
         - If a selected exhibit is near a restricted area or obstacle cluster, satisfy the visit from the nearest legal open-floor location instead of entering the risky area.
+        - If a selected exhibit would require entering restricted space or crossing a barrier, approach only as closely as the nearest legal open-floor position allows.
+        - A required gallery visit only needs legal entry into that gallery. Once the route has legally entered the required gallery, leave it again by the nearest legal continuation instead of wandering through adjacent interiors.
 
         ### Planning strategy
-        - First, silently identify a safe corridor skeleton from entrance to exit that stays legal.
-        - Second, follow the selected exhibit list in the order provided, unless a tiny local reorder is clearly safer.
-        - Third, attach short, legal detours from that skeleton to cover the selected exhibits.
-        - Fourth, convert the final walk into a single continuous polyline.
+        - First, silently identify all visible no-go areas: walls, restricted areas, restricted galleries, exhibit markers, and dead-end risky spaces.
+        - Second, build a safe corridor skeleton from entrance to exit that stays legal from start to finish.
+        - Third, use the selected exhibit list as the preferred visit order, but reorder when needed to preserve legality and reduce backtracking.
+        - Fourth, attach short, legal detours from that skeleton to cover the selected exhibits.
+        - Fifth, convert the final walk into a single continuous polyline.
         - If uncertain, choose the safer route instead of the shorter shortcut.
+        - After drafting the route, trim any detour that does not help cover a selected exhibit, reach a required gallery, or connect the legal start-to-exit walk.
 
         ### Path construction rules
         - The path must be one continuous, physically plausible walking route.
         - Use a multi-point polyline with many waypoints, not a single point and not just 2 points.
-        - Return between 30 and 55 coordinate pairs.
+        - Return between 20 and 32 coordinate pairs.
         - Consecutive points should trace a sensible walking path through open floor space.
+        - Every straight segment between consecutive points must be directly drawable through legal open floor. If a straight segment would clip a wall, restricted area, restricted gallery, or exhibit marker, add another waypoint instead of cutting through.
         - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
         - Prefer orthogonal walking segments where practical, using diagonals only for short local adjustments in open floor space.
         - Favor open corridors and wider spaces over risky shortcuts near hazards.
+        - Maintain visible clearance from restricted-region borders and exhibit markers rather than skimming right along them.
+        - When satisfying a must-see gallery requirement, make the visit as shallow as possible: enter legally, cover the requirement, and exit without crossing into neighboring risky interiors.
+        - After the route reaches the exit, stop immediately. Do not overshoot the exit or hook around it.
+        - Avoid accidentally passing near large numbers of unselected exhibits. If many unselected exhibits would also be covered, the route is probably too broad and should be tightened.
 
         ### Coordinate constraints
         - Image width: {img_width} pixels
@@ -178,15 +239,20 @@ Remember:
 - the last point must be inside the exit,
 - keep the first and last points comfortably inside those boxes, not on their borders,
 - the path must include enough waypoints to show the full walk.
-- treat the selected exhibit list as the default visiting order,
+- treat the selected exhibit list as the preferred visiting order, but reorder when needed to stay legal,
 - Keep the route short and deliberate.
 - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
 - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
+- make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
+- if a must-see gallery is close to restricted space, touch the legal portion you need and then leave immediately rather than traversing deeply through nearby gallery interiors,
+- trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
 - Before answering, silently verify that:
-  1. all selected exhibits are covered,
-  2. every must-see gallery is entered,
-  3. the first point is inside the entrance,
-  4. the last point is inside the exit.
+  1. every segment is legal and does not cut through a wall, restricted area, restricted gallery, or exhibit marker,
+  2. all selected exhibits are covered from legal open floor,
+  3. every must-see gallery is entered,
+  4. the first point is inside the entrance,
+  5. the last point is inside the exit,
+  6. the route is not unnecessarily passing near many unselected exhibits.
 - if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
 """
 
