@@ -44,6 +44,7 @@ def main():
      parser.add_argument('--annotations-dir', default='./original_floorplans/museum_layout_01')
      parser.add_argument('--extraction-output-image',    default=None)
      parser.add_argument('--validated-output-image',    default=None)
+     parser.add_argument('--validated-output-json',    required=True)
      parser.add_argument('--difference-threshold', type=int, default=10)
      parser.add_argument('--tolerance',            type=int, default=3,
                          help='Dilation radius (px) used to forgive residual '
@@ -59,23 +60,25 @@ def main():
 
      # Process image directories and filenames
      images_dir = Path(args.images_dir)
-     route_image_path = images_dir / "route_images" / args.route_image
-     original_image_path = images_dir / "original_images" / args.original_image
+     # route_image_path = images_dir / "route_images" / args.route_image
+     # original_image_path = images_dir / "original_images" / args.original_image
+     route_image_path = args.route_image
+     original_image_path = args.original_image
      extraction_output_image_path = args.extraction_output_image
      validated_output_image_path = args.validated_output_image
 
-     if extraction_output_image_path:
-          extracted_route_image_path = images_dir / "extracted_route_images"
-          extracted_route_image_path.mkdir(parents=True, exist_ok=True)
+     # if extraction_output_image_path:
+     #      extracted_route_image_path = images_dir / "extracted_route_images"
+     #      extracted_route_image_path.mkdir(parents=True, exist_ok=True)
 
-          extraction_output_image_path = extracted_route_image_path / args.extraction_output_image
+     #      extraction_output_image_path = extracted_route_image_path / args.extraction_output_image
 
      
-     if validated_output_image_path:
-          validated_output_image_path = images_dir / "validated_images"
-          validated_output_image_path.mkdir(parents=True, exist_ok=True)
+     # if validated_output_image_path:
+     #      validated_output_image_path = images_dir / "validated_images"
+     #      validated_output_image_path.mkdir(parents=True, exist_ok=True)
           
-          validated_output_image_path = validated_output_image_path / args.validated_output_image
+     #      validated_output_image_path = validated_output_image_path / args.validated_output_image
 
      # Load annotations
      annotations_values = load_json(annotations)
@@ -173,7 +176,7 @@ def main():
      validation_result['validation_summary']['scar'] = scar
      validation_result['semantic_validation_details'] = semantic_result_detailed
      
-     with open("validation_results.json", "w") as json_file:
+     with open(args.validated_output_json, "w") as json_file:
           json.dump(validation_result, json_file, indent=4)
     
 

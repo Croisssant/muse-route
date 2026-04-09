@@ -203,7 +203,6 @@ system_prompt_route = f"""
         ### Path construction rules
         - The path must be one continuous, physically plausible walking route.
         - Use a multi-point polyline with many waypoints, not a single point and not just 2 points.
-        - Return between 20 and 32 coordinate pairs.
         - Consecutive points should trace a sensible walking path through open floor space.
         - Every straight segment between consecutive points must be directly drawable through legal open floor. If a straight segment would clip a wall, restricted area, restricted gallery, or exhibit marker, add another waypoint instead of cutting through.
         - Keep the route compact: no loops, no retracing, no sightseeing detours, and no long perimeter sweeps.
