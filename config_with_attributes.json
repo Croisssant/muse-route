@@ -1,4 +1,14 @@
 {
+  "route-image": "",
+  "original-image": "",
+  "annotations": "",
+  "config-file": "",
+  "exhibits-csv-file": "",
+
+  "extraction-output-image": "",
+  "validated-output-image": "",
+  "validated-output-json": "",
+
   "_gallery_config_options": {
     "must_see": "Must vist route",
     "restricted": "Route cannot enter",
