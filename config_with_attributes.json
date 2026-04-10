@@ -1,5 +1,5 @@
 {
-  "gallery_config_options": {
+  "_gallery_config_options": {
     "must_see": "Must vist route",
     "restricted": "Route cannot enter",
     "normal": "No restrictions"
@@ -16,6 +16,7 @@
   "specific_exhibit_to_cover": [],
 
   "exhibit_attribute_constraints": {
+    "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": ["550 BC", "530 BC"]
     },
@@ -27,6 +28,22 @@
     },
     "technique_constraint": {
       "techniques": ["painted"]
+    },
+
+    "combined_constraint": {
+      "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",
+      "date_constraint": {
+        "in_range": []
+      },
+      "material_constraint": {
+        "materials": ["gold"]
+      },
+      "find_spot_constraint": {
+        "locations": ["Japan"]
+      },
+      "technique_constraint": {
+        "techniques": []
+      }
     }
   }
 }

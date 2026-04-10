@@ -104,6 +104,225 @@ class SemanticValidator:
         
         return None
     
+    def _check_date_match(self, row, date_constraint):
+        """
+        Check if a single exhibit row matches date constraint.
+        
+        Args:
+            row: DataFrame row
+            date_constraint: Date constraint dict
+        
+        Returns:
+            bool: True if matches, False otherwise
+        """
+        if not date_constraint:
+            return True
+        
+        # Use preprocessed columns
+        if pd.notna(row['production_year_min']):
+            start_year = int(row['production_year_min'])
+            end_year = int(row['production_year_max'])
+        else:
+            return False
+        
+        before_year = self._parse_year_value(date_constraint.get('before_year'))
+        after_year = self._parse_year_value(date_constraint.get('after_year'))
+        in_range = date_constraint.get('in_range')
+        
+        if in_range and isinstance(in_range, list) and len(in_range) == 2:
+            in_range = [self._parse_year_value(in_range[0]), self._parse_year_value(in_range[1])]
+        else:
+            in_range = None
+        
+        if before_year is not None:
+            if end_year >= before_year:
+                return False
+        
+        if after_year is not None:
+            if start_year <= after_year:
+                return False
+        
+        if in_range is not None:
+            range_start, range_end = in_range
+            if start_year < range_start or end_year > range_end:
+                return False
+        
+        return True
+    
+    def _check_material_match(self, row, material_constraint):
+        """
+        Check if a single exhibit row matches material constraint.
+        
+        Args:
+            row: DataFrame row
+            material_constraint: Material constraint dict
+        
+        Returns:
+            bool: True if matches, False otherwise
+        """
+        if not material_constraint:
+            return True
+        
+        required_materials = material_constraint.get('materials', [])
+        if not required_materials:
+            return True
+        
+        material_str = str(row['Materials']).lower()
+        
+        for req_material in required_materials:
+            if req_material.lower() in material_str:
+                return True
+        
+        return False
+    
+    def _check_location_match(self, row, location_constraint):
+        """
+        Check if a single exhibit row matches find spot constraint.
+        
+        Args:
+            row: DataFrame row
+            location_constraint: Find spot constraint dict
+        
+        Returns:
+            bool: True if matches, False otherwise
+        """
+        if not location_constraint:
+            return True
+        
+        locations = location_constraint.get('locations', [])
+        if not locations:
+            return True
+        
+        # Use preprocessed columns
+        city = str(row['find_spot_city']).lower() if pd.notna(row['find_spot_city']) else ''
+        country = str(row['find_spot_country']).lower() if pd.notna(row['find_spot_country']) else ''
+        
+        for location in locations:
+            location_lower = location.lower()
+            if location_lower in city or location_lower in country:
+                return True
+        
+        return False
+    
+    def _check_technique_match(self, row, technique_constraint):
+        """
+        Check if a single exhibit row matches technique constraint.
+        
+        Args:
+            row: DataFrame row
+            technique_constraint: Technique constraint dict
+        
+        Returns:
+            bool: True if matches, False otherwise
+        """
+        if not technique_constraint:
+            return True
+        
+        required_techniques = technique_constraint.get('techniques', [])
+        if not required_techniques:
+            return True
+        
+        technique_str = str(row['Technique']).lower()
+        
+        for req_technique in required_techniques:
+            if req_technique.lower() in technique_str:
+                return True
+        
+        return False
+    
+    def validate_combined_constraint(self):
+        """
+        Validate that ALL exhibits matching ALL combined constraints were visited.
+        Uses AND logic: exhibit must match ALL specified constraints simultaneously.
+        
+        Returns:
+            dict: Validation result with 'passed' boolean and details
+        """
+        if not self.attribute_constraints or 'combined_constraint' not in self.attribute_constraints:
+            return {
+                'passed': True,
+                'message': "✓ No combined constraints specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        if self.exhibits_df is None:
+            return {
+                'passed': False,
+                'message': "✗ Cannot validate combined constraints: exhibits CSV not loaded",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        combined = self.attribute_constraints['combined_constraint']
+        
+        # Extract individual constraints
+        date_constraint = combined.get('date_constraint')
+        material_constraint = combined.get('material_constraint')
+        location_constraint = combined.get('find_spot_constraint')
+        technique_constraint = combined.get('technique_constraint')
+        
+        # Build list of active constraints for display
+        active_constraints = []
+        if date_constraint:
+            active_constraints.append("date")
+        if material_constraint:
+            active_constraints.append("material")
+        if location_constraint:
+            active_constraints.append("location")
+        if technique_constraint:
+            active_constraints.append("technique")
+        
+        if not active_constraints:
+            return {
+                'passed': True,
+                'message': "✓ Combined constraint has no conditions specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        # Find exhibits matching ALL constraints
+        matching_exhibit_ids = []
+        
+        for _, row in self.exhibits_df.iterrows():
+            # Check ALL constraints - must pass all to match
+            if date_constraint and not self._check_date_match(row, date_constraint):
+                continue
+            if material_constraint and not self._check_material_match(row, material_constraint):
+                continue
+            if location_constraint and not self._check_location_match(row, location_constraint):
+                continue
+            if technique_constraint and not self._check_technique_match(row, technique_constraint):
+                continue
+            
+            # Passed all checks!
+            matching_exhibit_ids.append(int(row['exhibit_number']))
+        
+        # Check which matching exhibits were visited
+        visited_matching = [eid for eid in matching_exhibit_ids if eid in self.visited_exhibits]
+        missing = [eid for eid in matching_exhibit_ids if eid not in self.visited_exhibits]
+        
+        passed = len(missing) == 0
+        
+        if len(matching_exhibit_ids) > 0:
+            percentage = (len(visited_matching) / len(matching_exhibit_ids)) * 100
+        else:
+            percentage = 100.0
+        
+        constraint_str = " AND ".join(active_constraints)
+        
+        return {
+            'passed': passed,
+            'required_exhibits': matching_exhibit_ids,
+            'visited_exhibits': visited_matching,
+            'missing_exhibits': missing,
+            'percentage': round(percentage, 1),
+            'message': f"{'✓' if passed else '✗'} Combined constraint ({constraint_str}): {len(visited_matching)}/{len(matching_exhibit_ids)} exhibits visited ({percentage:.1f}%){'' if passed else f' (missing: {missing})'}"
+        }
+    
     def validate_date_constraint(self):
         """
         Validate that ALL exhibits matching date constraints were visited.
@@ -466,7 +685,7 @@ class SemanticValidator:
     
     def validate_category_coverage(self):
         """
-        Validate that at least one exhibit from each required category was visited.
+        Validate that all exhibits from each required category was visited.
         
         Returns:
             dict: Validation result with 'passed' boolean and details per category
@@ -503,7 +722,7 @@ class SemanticValidator:
             
             exhibits_in_category = self.exhibits_by_section[category]
             visited_from_category = [e for e in self.visited_exhibits if e in exhibits_in_category]
-            passed = len(visited_from_category) > 0
+            passed = len(visited_from_category) == len(exhibits_in_category)
             
             # Calculate percentage for this category
             total_in_category = len(exhibits_in_category)
@@ -594,6 +813,7 @@ class SemanticValidator:
         material_validation = self.validate_material_constraint()
         find_spot_validation = self.validate_find_spot_constraint()
         technique_validation = self.validate_technique_constraint()
+        combined_validation = self.validate_combined_constraint()
         
         # Overall pass requires all checks to pass
         overall_passed = (
@@ -603,7 +823,8 @@ class SemanticValidator:
             date_validation['passed'] and
             material_validation['passed'] and
             find_spot_validation['passed'] and
-            technique_validation['passed']
+            technique_validation['passed'] and
+            combined_validation['passed']
         )
         
         # Print results
@@ -627,6 +848,7 @@ class SemanticValidator:
             print(f"{material_validation['message']}")
             print(f"{find_spot_validation['message']}")
             print(f"{technique_validation['message']}")
+            print(f"{combined_validation['message']}")
         
         print("\n" + "-"*60)
         print(f"Overall Semantic Validation: {'✅ PASSED' if overall_passed else '❌ FAILED'}")
@@ -667,6 +889,10 @@ class SemanticValidator:
                 "technique_constraint": {
                     "valid": technique_validation['passed'],
                     "percentage": technique_validation.get('percentage', 0.0)
+                },
+                "combined_constraint": {
+                    "valid": combined_validation['passed'],
+                    "percentage": combined_validation.get('percentage', 0.0)
                 }
             }
         }, {
@@ -679,6 +905,7 @@ class SemanticValidator:
             'material_validation': material_validation,
             'find_spot_validation': find_spot_validation,
             'technique_validation': technique_validation,
+            'combined_validation': combined_validation,
             'summary': {
                 'total_exhibits_visited': len(self.visited_exhibits),
                 'required_minimum': self.at_least_n_exhibits_to_cover,
