@@ -1,8 +1,9 @@
 """
-Exhibit List Generator (Parquet Version v3.0)
-Generates a JSON list of exhibits with duplicate prevention and validation.
-Reads artifact data from parquet file instead of file system.
-Output includes only exhibit_number and description fields.
+Exhibit List Generator (CSV Version v4.0)
+Generates exhibit list from preprocessed CSV with exhibit number assignments.
+Outputs:
+  1. CSV file with exhibit_number column + all original columns
+  2. JSON file with exhibit_number and description only
 """
 
 import json
@@ -53,23 +54,23 @@ def parse_input_line(line):
     return numbers, section
 
 
-def load_artifacts_dataframe(parquet_file='data/timetravel.parquet'):
+def load_artifacts_dataframe(csv_file='selected_exhibits_preprocessed.csv'):
     """
-    Load artifacts from parquet file.
+    Load artifacts from preprocessed CSV file.
     Returns: pandas DataFrame
     """
-    parquet_path = Path(__file__).parent / parquet_file
+    csv_path = Path(csv_file)
     
-    if not parquet_path.exists():
-        raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+    if not csv_path.exists():
+        raise FileNotFoundError(f"CSV file not found: {csv_path}")
     
-    df = pd.read_parquet(parquet_path)
+    df = pd.read_csv(csv_path)
     
     # Ensure required columns exist
     required_cols = ['id', 'Section', 'description']
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
-        raise ValueError(f"Missing required columns in parquet file: {missing_cols}")
+        raise ValueError(f"Missing required columns in CSV file: {missing_cols}")
     
     return df
 
@@ -139,22 +140,23 @@ def validate_artifact_availability(section_requests, df):
     return is_valid, validation_report
 
 
-def generate_exhibit_list(input_file=None, parquet_file='data/timetravel.parquet'):
+def generate_exhibit_list(input_file=None, csv_file='selected_exhibits_preprocessed.csv'):
     """
     Generate exhibit list from user input or file with duplicate prevention.
-    Reads artifact data from parquet file.
-    Returns: (exhibit_list, artifact_ids_list, section_mapping)
+    Reads artifact data from preprocessed CSV file.
+    Returns: (exhibit_json_list, exhibit_dataframe_with_numbers)
     """
-    print("🏛️  Exhibit List Generator (Parquet Version v3.0)")
+    print("🏛️  Exhibit List Generator (CSV Version v4.0)")
     print("=" * 60)
     
     # Load artifacts dataframe
-    print(f"📊 Loading artifacts from: {parquet_file}")
+    print(f"📊 Loading artifacts from: {csv_file}")
     try:
-        df = load_artifacts_dataframe(parquet_file)
-        print(f"✅ Loaded {len(df)} artifacts from parquet file")
+        df = load_artifacts_dataframe(csv_file)
+        print(f"✅ Loaded {len(df)} artifacts from CSV file")
+        print(f"   Columns: {', '.join(df.columns.tolist())}")
     except Exception as e:
-        print(f"❌ Error loading parquet file: {e}")
+        print(f"❌ Error loading CSV file: {e}")
         return None
     
     if input_file and Path(input_file).exists():
@@ -228,8 +230,8 @@ def generate_exhibit_list(input_file=None, parquet_file='data/timetravel.parquet
     # Track used artifact IDs globally to prevent duplicates
     used_artifact_ids = set()
     used_artifact_ids_list = []  # Ordered list for display
-    exhibit_list = []
-    section_mapping = {}  # Track which section each exhibit came from
+    exhibit_json_list = []  # For JSON output (exhibit_number + description only)
+    exhibit_rows_list = []  # For CSV output (full rows with exhibit_number)
     
     # Process each section
     for section, exhibit_numbers in section_requests.items():
@@ -259,14 +261,19 @@ def generate_exhibit_list(input_file=None, parquet_file='data/timetravel.parquet
                 # This artifact is unique, use it
                 used_artifact_ids.add(artifact_id)
                 used_artifact_ids_list.append(artifact_id)
-                section_mapping[exhibit_num] = section
                 
-                # Create filtered exhibit entry with only exhibit_number and description
-                exhibit_entry = {
+                # Create JSON entry with only exhibit_number and description
+                exhibit_json_entry = {
                     'exhibit_number': exhibit_num,
                     'description': artifact_row['description']
                 }
-                exhibit_list.append(exhibit_entry)
+                exhibit_json_list.append(exhibit_json_entry)
+                
+                # Create CSV entry with exhibit_number + all original columns
+                row_dict = artifact_row.to_dict()
+                row_dict['exhibit_number'] = exhibit_num
+                exhibit_rows_list.append(row_dict)
+                
                 artifacts_assigned += 1
                 print(f"   ✓ Exhibit {exhibit_num}: {artifact_id}")
                 break
@@ -276,44 +283,37 @@ def generate_exhibit_list(input_file=None, parquet_file='data/timetravel.parquet
         
         print(f"   → Assigned {artifacts_assigned}/{len(exhibit_numbers)} exhibits")
     
-    # Sort by exhibit number
-    exhibit_list.sort(key=lambda x: x['exhibit_number'])
+    # Create DataFrame for CSV output with exhibit_number as first column
+    exhibit_df = pd.DataFrame(exhibit_rows_list)
     
-    return exhibit_list, used_artifact_ids_list, section_mapping
+    # Reorder columns to put exhibit_number first
+    cols = exhibit_df.columns.tolist()
+    cols.remove('exhibit_number')
+    exhibit_df = exhibit_df[['exhibit_number'] + cols]
+    
+    # Sort by exhibit number
+    exhibit_df = exhibit_df.sort_values('exhibit_number').reset_index(drop=True)
+    exhibit_json_list.sort(key=lambda x: x['exhibit_number'])
+    
+    return exhibit_json_list, exhibit_df
 
 
-def save_exhibit_list(exhibit_list, output_file='exhibit_list.json'):
+def save_exhibit_json(exhibit_list, output_file='exhibit_list.json'):
     """
-    Save exhibit list to JSON file.
+    Save exhibit list to JSON file (exhibit_number + description only).
     """
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(exhibit_list, f, indent=2, ensure_ascii=False)
     
-    print(f"\n💾 Saved to: {output_file}")
+    print(f"💾 Saved JSON to: {output_file}")
 
 
-def save_exhibits_by_section(section_mapping, output_file='exhibits_by_section.json'):
+def save_exhibit_csv(exhibit_df, output_file='selected_exhibits_final.csv'):
     """
-    Save exhibit numbers organized by section to JSON file.
-    Format: { "section_name": [exhibit_numbers...] }
+    Save exhibit DataFrame to CSV file (exhibit_number + all columns).
     """
-    # Create dictionary with section names as keys and lists of exhibit numbers as values
-    exhibits_by_section = {}
-    
-    for exhibit_num, section in section_mapping.items():
-        if section not in exhibits_by_section:
-            exhibits_by_section[section] = []
-        exhibits_by_section[section].append(exhibit_num)
-    
-    # Sort exhibit numbers within each section
-    for section in exhibits_by_section:
-        exhibits_by_section[section].sort()
-    
-    # Save to file
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(exhibits_by_section, f, indent=2, ensure_ascii=False)
-    
-    print(f"💾 Saved section mapping to: {output_file}")
+    exhibit_df.to_csv(output_file, index=False, encoding='utf-8')
+    print(f"💾 Saved CSV to: {output_file}")
 
 
 def main():
@@ -324,18 +324,15 @@ def main():
     
     # Set up argument parser
     parser = argparse.ArgumentParser(
-        description='Generate exhibit list from input file with section-based organization',
+        description='Generate exhibit list from preprocessed CSV with exhibit number assignments',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Use default paths
-  python generate_exhibit_list.py -i exhibit_input.txt
+  # Basic usage
+  python generate_exhibit_list.py -i exhibit_input.txt -c selected_exhibits_preprocessed.csv -o selected_exhibits_final.csv
   
-  # Specify custom output directory
-  python generate_exhibit_list.py -i exhibit_input.txt -o custom_output/
-  
-  # Specify custom data file
-  python generate_exhibit_list.py -i exhibit_input.txt -d custom_data.parquet
+  # Specify custom JSON output directory
+  python generate_exhibit_list.py -i exhibit_input.txt -c selected_exhibits_preprocessed.csv -o final.csv -j output_dir/
         """
     )
     
@@ -347,73 +344,78 @@ Examples:
     )
     
     parser.add_argument(
-        '-o', '--output-dir',
+        '-c', '--csv-input',
         type=str,
-        default=None,
-        help='Output directory for generated files (default: original_floorplans/museum_layout_01/)'
+        default='selected_exhibits_preprocessed.csv',
+        help='Input CSV file with preprocessed exhibit data (default: selected_exhibits_preprocessed.csv)'
     )
     
     parser.add_argument(
-        '-d', '--data',
+        '-o', '--csv-output',
         type=str,
-        default='data/timetravel.parquet',
-        help='Path to parquet data file (default: data/timetravel.parquet)'
+        required=True,
+        help='Output CSV file with exhibit_number column (required)'
+    )
+    
+    parser.add_argument(
+        '-j', '--json-dir',
+        type=str,
+        default=None,
+        help='Output directory for JSON file (default: same as CSV output directory)'
     )
     
     args = parser.parse_args()
     
-    # Determine output directory
-    if args.output_dir:
-        output_dir = Path(args.output_dir)
+    # Determine JSON output directory
+    if args.json_dir:
+        json_dir = Path(args.json_dir)
     else:
-        # Default to museum_layout_01
-        output_dir = Path(__file__).parent.parent / "original_floorplans/museum_layout_01"
+        # Default to same directory as CSV output
+        json_dir = Path(args.csv_output).parent
     
     # Create output directory if it doesn't exist
-    output_dir.mkdir(parents=True, exist_ok=True)
+    json_dir.mkdir(parents=True, exist_ok=True)
     
-    # Generate exhibit list with custom data file
-    result = generate_exhibit_list(args.input, args.data)
+    # Generate exhibit list
+    result = generate_exhibit_list(args.input, args.csv_input)
     
     if result:
-        exhibit_list, artifact_ids_list, section_mapping = result
+        exhibit_json_list, exhibit_df = result
         
         print("\n" + "=" * 60)
         print("✨ Generation Complete!")
         print("=" * 60)
-        print(f"📊 Total exhibits in list: {len(exhibit_list)}")
+        print(f"📊 Total exhibits in list: {len(exhibit_json_list)}")
         
         # Show summary by section
-        section_counts = {}
-        for exhibit_num, section in section_mapping.items():
-            section_counts[section] = section_counts.get(section, 0) + 1
+        section_counts = exhibit_df['Section'].value_counts().to_dict()
         
         print("\n📈 Exhibits by section:")
         for section, count in sorted(section_counts.items()):
             print(f"   • {section}: {count} exhibit(s)")
         
-        # Display all artifact IDs used (for cross-checking)
-        print(f"\n🔢 Artifact IDs Used ({len(artifact_ids_list)} total):")
-        print(f"   {', '.join(artifact_ids_list)}")
+        # Display artifact IDs used (for cross-checking)
+        artifact_ids = exhibit_df['id'].tolist()
+        print(f"\n🔢 Artifact IDs Used ({len(artifact_ids)} total):")
+        print(f"   {', '.join(map(str, artifact_ids))}")
         
         # Verify uniqueness
-        unique_ids = set(artifact_ids_list)
-        print(f"\n✅ Artifact Uniqueness: {len(unique_ids)}/{len(artifact_ids_list)} unique artifacts")
+        unique_ids = exhibit_df['id'].nunique()
+        print(f"\n✅ Artifact Uniqueness: {unique_ids}/{len(artifact_ids)} unique artifacts")
         
-        if len(unique_ids) < len(artifact_ids_list):
+        if unique_ids < len(artifact_ids):
             print("⚠️  Warning: Some duplicate artifacts detected!")
         
-        # Save to files in specified directory
-        output_file = output_dir / 'exhibit_list.json'
-        save_exhibit_list(exhibit_list, str(output_file))
+        # Save CSV file
+        save_exhibit_csv(exhibit_df, args.csv_output)
         
-        # Save exhibits organized by section
-        section_file = output_dir / 'exhibits_by_section.json'
-        save_exhibits_by_section(section_mapping, str(section_file))
+        # Save JSON file
+        json_file = json_dir / 'exhibit_list.json'
+        save_exhibit_json(exhibit_json_list, str(json_file))
         
         print(f"\n✅ Done! Two files generated:")
-        print(f"   • {output_file} - Full exhibit list with descriptions")
-        print(f"   • {section_file} - Exhibit numbers organized by section")
+        print(f"   • {args.csv_output} - Full exhibit data with exhibit_number column")
+        print(f"   • {json_file} - Exhibit list with descriptions (JSON)")
     else:
         print("\n❌ Failed to generate exhibit list")
 

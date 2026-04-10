@@ -1,11 +1,13 @@
 """
 Exhibit Visualization by Section
 Visualizes exhibits on the museum floorplan, color-coded by section.
+Reads exhibit data from CSV file with exhibit_number column.
 """
 
 import json
 import cv2
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend to avoid Tkinter issues
@@ -13,10 +15,29 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 
-def load_exhibits_by_section(json_file='exhibits_by_section.json'):
-    """Load the exhibits organized by section."""
-    with open(json_file, 'r', encoding='utf-8') as f:
-        return json.load(f)
+def load_exhibits_from_csv(csv_file):
+    """
+    Load exhibits from CSV file with exhibit_number column.
+    Returns: (exhibits_by_section, exhibit_to_section_mapping)
+    """
+    df = pd.read_csv(csv_file)
+    
+    # Verify required columns exist
+    required_cols = ['exhibit_number', 'Section']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required columns in CSV: {missing_cols}")
+    
+    # Create exhibits_by_section dictionary
+    exhibits_by_section = {}
+    for section in df['Section'].unique():
+        section_exhibits = df[df['Section'] == section]['exhibit_number'].tolist()
+        exhibits_by_section[section] = sorted(section_exhibits)
+    
+    # Create exhibit_to_section mapping
+    exhibit_to_section = dict(zip(df['exhibit_number'], df['Section']))
+    
+    return exhibits_by_section, exhibit_to_section
 
 
 def load_annotations(json_file):
@@ -51,20 +72,7 @@ def generate_section_colors(sections):
     return section_colors
 
 
-def create_exhibit_section_mapping(exhibits_by_section):
-    """
-    Create a mapping from exhibit_number to section.
-    Returns: dict {exhibit_number: section_name}
-    """
-    exhibit_to_section = {}
-    for section, exhibit_numbers in exhibits_by_section.items():
-        for exhibit_num in exhibit_numbers:
-            exhibit_to_section[exhibit_num] = section
-    
-    return exhibit_to_section
-
-
-def visualize_exhibits(floorplan_path, annotations_path, exhibits_by_section_path, output_path='exhibit_visualization.png'):
+def visualize_exhibits(floorplan_path, annotations_path, exhibits_csv_path, output_path='exhibit_visualization.png'):
     """
     Visualize exhibits on the floorplan, color-coded by section.
     """
@@ -72,8 +80,10 @@ def visualize_exhibits(floorplan_path, annotations_path, exhibits_by_section_pat
     print("=" * 60)
     
     # Load data
-    print(f"📊 Loading exhibits by section from: {exhibits_by_section_path}")
-    exhibits_by_section = load_exhibits_by_section(exhibits_by_section_path)
+    print(f"📊 Loading exhibits from CSV: {exhibits_csv_path}")
+    exhibits_by_section, exhibit_to_section = load_exhibits_from_csv(exhibits_csv_path)
+    
+    print(f"   Loaded {sum(len(v) for v in exhibits_by_section.values())} exhibits across {len(exhibits_by_section)} sections")
     
     print(f"📄 Loading annotations from: {annotations_path}")
     annotations = load_annotations(annotations_path)
@@ -93,9 +103,6 @@ def visualize_exhibits(floorplan_path, annotations_path, exhibits_by_section_pat
     print(f"\n🎨 Section Colors:")
     for section, color in section_colors.items():
         print(f"   • {section}: RGB{color}")
-    
-    # Create exhibit to section mapping
-    exhibit_to_section = create_exhibit_section_mapping(exhibits_by_section)
     
     print(f"\n📍 Processing {len(annotations['exhibits'])} exhibits...")
     
@@ -211,17 +218,17 @@ def main():
         description='Visualize exhibits on museum floorplan, color-coded by section',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-            Examples:
-            # Use default paths
-            python visualize_exhibits_by_section.py \\
-                -f original_floorplans/museum_layout_01/museum_layout_01(Wordless).png \\
-                -a original_floorplans/museum_layout_01/museum_layout_annotations.json \\
-                -e original_floorplans/museum_layout_01/exhibits_by_section.json
-            
-            # Specify custom output path
-            python visualize_exhibits_by_section.py \\
-                -f floorplan.png -a annotations.json -e exhibits.json \\
-                -o custom_output.png
+Examples:
+  # Use default paths
+  python visualize_exhibits_by_section.py \\
+      -f original_floorplans/museum_layout_01/museum_layout_01(Wordless).png \\
+      -a original_floorplans/museum_layout_01/museum_layout_annotations.json \\
+      -c selected_exhibits_final.csv
+  
+  # Specify custom output path
+  python visualize_exhibits_by_section.py \\
+      -f floorplan.png -a annotations.json -c exhibits.csv \\
+      -o custom_output.png
         """
     )
     
@@ -240,17 +247,17 @@ def main():
     )
     
     parser.add_argument(
-        '-e', '--exhibits',
+        '-c', '--csv',
         type=str,
         required=True,
-        help='Path to exhibits_by_section.json file (generated by generate_exhibit_list.py)'
+        help='Path to exhibits CSV file with exhibit_number column (generated by generate_exhibit_list.py)'
     )
     
     parser.add_argument(
         '-o', '--output',
         type=str,
         default=None,
-        help='Output path for visualization image (default: same directory as exhibits file with name "exhibit_visualization.png")'
+        help='Output path for visualization image (default: same directory as CSV file with name "exhibit_visualization.png")'
     )
     
     args = parser.parse_args()
@@ -259,9 +266,9 @@ def main():
     if args.output:
         output_path = args.output
     else:
-        # Default: same directory as exhibits file
-        exhibits_path = Path(args.exhibits)
-        output_path = str(exhibits_path.parent / 'exhibit_visualization.png')
+        # Default: same directory as CSV file
+        csv_path = Path(args.csv)
+        output_path = str(csv_path.parent / 'exhibit_visualization.png')
     
     # Verify input files exist
     if not Path(args.floorplan).exists():
@@ -272,15 +279,15 @@ def main():
         print(f"❌ Annotations not found: {args.annotations}")
         return
     
-    if not Path(args.exhibits).exists():
-        print(f"❌ Exhibits by section file not found: {args.exhibits}")
+    if not Path(args.csv).exists():
+        print(f"❌ Exhibits CSV file not found: {args.csv}")
         print(f"   Please run generate_exhibit_list.py first to create this file.")
         return
     
     # Create visualization
     try:
-        visualize_exhibits(args.floorplan, args.annotations, args.exhibits, output_path)
-        print(f"\n✅ Done! Open the visualization files to view exhibits by section.")
+        visualize_exhibits(args.floorplan, args.annotations, args.csv, output_path)
+        print(f"\n✅ Done! Open the visualization file to view exhibits by section.")
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback

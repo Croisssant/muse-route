@@ -1,16 +1,10 @@
-Available Exhibit Sections:
+Available Filtered Exhibit Sections:
 ========================================
-  • Ancient Egyptian
-  • Greek
-  • Gupta dynasty
-  • Japanese
-  • Mauryan
-  • Maya
-  • Mesopotamian
-  • Mohenjo-daro
-  • Persian
-  • Tang dynasty
-  • roman
-  • viking
 
-Total: 12 sections
+- Greek
+- Mesopotamian
+- Tang dynasty
+- Ancient Egyptian
+- Japanese
+
+Total: 5 sections

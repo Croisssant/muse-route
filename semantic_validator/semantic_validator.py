@@ -9,15 +9,14 @@ from PIL import Image, ImageDraw, ImageFont
 import math
 
 class SemanticValidator:
-    def __init__(self, config_file, visited_exhibits, exhibits_by_section_file=None, exhibits_csv_file=None):
+    def __init__(self, config_file, visited_exhibits, exhibits_csv_file=None):
         """
         Initialize the semantic validator.
         
         Args:
             config_file: Path to JSON file with exhibit configurations
-            visited_exhibits: List of visited exhibit IDs (can be strings or integers)
-            exhibits_by_section_file: Optional path to JSON file mapping categories to exhibit numbers
-            exhibits_csv_file: Optional path to CSV file with exhibit metadata for attribute validation
+            visited_exhibits: List of visited exhibit_numbers (can be strings or integers)
+            exhibits_csv_file: Path to CSV file with exhibit_number, Section, and preprocessed columns
         """
 
         with open(config_file, 'r') as f:
@@ -30,77 +29,85 @@ class SemanticValidator:
         self.at_least_n_exhibits_to_cover = self.config.get("at_least_n_exhibits_to_cover", 0)
         self.specific_exhibit_to_cover = self.config.get("specific_exhibit_to_cover", [])
         
-        # Load exhibit category mappings if provided
-        self.exhibits_by_section = {}
-        if exhibits_by_section_file:
-            with open(exhibits_by_section_file, 'r') as f:
-                self.exhibits_by_section = json.load(f)
-        
-        # Load exhibit metadata for attribute validation
+        # Load exhibit metadata from CSV
         self.exhibits_df = None
+        self.exhibits_by_section = {}
+        
         if exhibits_csv_file and Path(exhibits_csv_file).exists():
             self.exhibits_df = pd.read_csv(exhibits_csv_file)
             print(f"✓ Loaded {len(self.exhibits_df)} exhibits from {exhibits_csv_file}")
+            
+            # Verify required columns exist
+            required_cols = ['exhibit_number', 'Section']
+            missing_cols = [col for col in required_cols if col not in self.exhibits_df.columns]
+            if missing_cols:
+                print(f"⚠️  Warning: Missing required columns: {missing_cols}")
+            else:
+                # Build exhibits_by_section mapping from CSV
+                for section in self.exhibits_df['Section'].unique():
+                    section_exhibits = self.exhibits_df[self.exhibits_df['Section'] == section]['exhibit_number'].tolist()
+                    self.exhibits_by_section[section] = section_exhibits
+                print(f"✓ Built section mappings for {len(self.exhibits_by_section)} sections")
+            
+            # Validate that CSV has preprocessed columns for attribute validation
+            if self.config.get("exhibit_attribute_constraints"):
+                preprocessed_cols = ['production_year_min', 'production_year_max', 'find_spot_city', 'find_spot_country']
+                missing_preprocessed = [col for col in preprocessed_cols if col not in self.exhibits_df.columns]
+                
+                if missing_preprocessed:
+                    print(f"⚠️  Warning: Missing preprocessed columns: {missing_preprocessed}")
+                    print(f"   Run preprocess_exhibits.py first to generate these columns")
+                else:
+                    print(f"✓ Preprocessed columns detected")
         
         # Load attribute constraints
         self.attribute_constraints = self.config.get("exhibit_attribute_constraints", {})
-
     
-    def parse_production_date_to_year(self, date_str):
+    def _parse_year_value(self, year_value):
         """
-        Parse production date string to numeric year(s) for comparison.
-        Handles BC/AD, ranges, and circa notations.
+        Parse year value from config - supports both numeric and string formats.
         
         Args:
-            date_str: Production date string (e.g., "500BC-490BC", "618-906", "307")
+            year_value: Can be int (e.g., 600, -400) or string (e.g., "600 AD", "400 BC")
         
         Returns:
-            tuple: (start_year, end_year) as integers. BC years are negative.
-                   Returns (None, None) if parsing fails.
-        
-        Examples:
-            "500BC-490BC" -> (-500, -490)
-            "618-906" -> (618, 906)
-            "307" -> (307, 307)
-            "500BC (circa)" -> (-500, -500)
+            int: Numeric year (positive for AD, negative for BC) or None if invalid
         """
-        if pd.isna(date_str):
-            return (None, None)
+        if year_value is None:
+            return None
         
-        date_str = str(date_str).strip()
+        # If already numeric, return as-is
+        if isinstance(year_value, (int, float)):
+            return int(year_value)
         
-        # Remove parenthetical notations like (circa), (about)
-        date_str = re.sub(r'\s*\([^)]+\)', '', date_str)
-        date_str = date_str.strip()
-        
-        # Check for range: "500BC-490BC" or "618-906"
-        range_match = re.match(r'^(\d+)\s*(BC|AD|bc|ad)?\s*-\s*(\d+)\s*(BC|AD|bc|ad)?$', date_str, re.IGNORECASE)
-        if range_match:
-            start_num = int(range_match.group(1))
-            start_bc = range_match.group(2) and range_match.group(2).upper() == 'BC'
-            end_num = int(range_match.group(3))
-            end_bc = range_match.group(4) and range_match.group(4).upper() == 'BC'
+        # Parse string format
+        if isinstance(year_value, str):
+            year_str = year_value.strip()
             
-            start_year = -start_num if start_bc else start_num
-            end_year = -end_num if end_bc else end_num
+            # Try to match "NUMBER BC" or "NUMBER AD"
+            import re
+            match = re.match(r'^(\d+)\s*(BC|AD|bc|ad)?$', year_str, re.IGNORECASE)
+            if match:
+                number = int(match.group(1))
+                era = match.group(2)
+                
+                if era and era.upper() == 'BC':
+                    return -number  # BC years are negative
+                else:
+                    return number  # AD years are positive (or no era specified = AD)
             
-            return (min(start_year, end_year), max(start_year, end_year))
+            # Try just a number string
+            try:
+                return int(year_str)
+            except ValueError:
+                pass
         
-        # Check for single year: "307", "500BC", "200 AD"
-        single_match = re.match(r'^(\d+)\s*(BC|AD|bc|ad)?$', date_str, re.IGNORECASE)
-        if single_match:
-            year_num = int(single_match.group(1))
-            is_bc = single_match.group(2) and single_match.group(2).upper() == 'BC'
-            
-            year = -year_num if is_bc else year_num
-            return (year, year)
-        
-        # Unable to parse
-        return (None, None)
+        return None
     
     def validate_date_constraint(self):
         """
         Validate that ALL exhibits matching date constraints were visited.
+        Requires preprocessed CSV with production_year_min and production_year_max columns.
         
         Returns:
             dict: Validation result with 'passed' boolean and details
@@ -123,18 +130,40 @@ class SemanticValidator:
                 'missing_exhibits': []
             }
         
+        # Verify preprocessed columns exist
+        if 'production_year_min' not in self.exhibits_df.columns:
+            return {
+                'passed': False,
+                'message': "✗ Cannot validate date constraints: CSV not preprocessed (run preprocess_exhibits.py first)",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
         date_constraint = self.attribute_constraints['date_constraint']
-        before_year = date_constraint.get('before_year')
-        after_year = date_constraint.get('after_year')
-        in_range = date_constraint.get('in_range')  # [start, end]
+        
+        # Parse year values (supports both numeric and string formats)
+        before_year = self._parse_year_value(date_constraint.get('before_year'))
+        after_year = self._parse_year_value(date_constraint.get('after_year'))
+        
+        # Parse in_range if provided
+        in_range = date_constraint.get('in_range')
+        if in_range:
+            if isinstance(in_range, list) and len(in_range) == 2:
+                in_range = [self._parse_year_value(in_range[0]), self._parse_year_value(in_range[1])]
+            else:
+                in_range = None
         
         # Find all exhibits matching the date constraint
         matching_exhibit_ids = []
         
         for _, row in self.exhibits_df.iterrows():
-            start_year, end_year = self.parse_production_date_to_year(row['Production date'])
-            
-            if start_year is None or end_year is None:
+            # Use preprocessed columns directly
+            if pd.notna(row['production_year_min']):
+                start_year = int(row['production_year_min'])
+                end_year = int(row['production_year_max'])
+            else:
+                # Skip rows where date parsing failed
                 continue
             
             matches = True
@@ -156,7 +185,7 @@ class SemanticValidator:
                     matches = False
             
             if matches:
-                matching_exhibit_ids.append(int(row['id']))
+                matching_exhibit_ids.append(int(row['exhibit_number']))
         
         # Check which matching exhibits were visited
         visited_matching = [eid for eid in matching_exhibit_ids if eid in self.visited_exhibits]
@@ -232,7 +261,7 @@ class SemanticValidator:
             # Check if any required material is in this exhibit's materials
             for req_material in required_materials:
                 if req_material.lower() in material_str:
-                    matching_exhibit_ids.append(int(row['id']))
+                    matching_exhibit_ids.append(int(row['exhibit_number']))
                     break
         
         # Check which matching exhibits were visited
@@ -260,6 +289,7 @@ class SemanticValidator:
     def validate_find_spot_constraint(self):
         """
         Validate that ALL exhibits matching find spot constraints were visited.
+        Requires preprocessed CSV with find_spot_city and find_spot_country columns.
         
         Returns:
             dict: Validation result with 'passed' boolean and details
@@ -276,7 +306,20 @@ class SemanticValidator:
         if self.exhibits_df is None:
             return {
                 'passed': False,
-                'message': "✗ Cannot validate find spot constraints: exhibits CSV not loaded"
+                'message': "✗ Cannot validate find spot constraints: exhibits CSV not loaded",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        # Verify preprocessed columns exist
+        if 'find_spot_city' not in self.exhibits_df.columns or 'find_spot_country' not in self.exhibits_df.columns:
+            return {
+                'passed': False,
+                'message': "✗ Cannot validate find spot constraints: CSV not preprocessed (run preprocess_exhibits.py first)",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
             }
         
         find_spot_constraint = self.attribute_constraints['find_spot_constraint']
@@ -291,16 +334,19 @@ class SemanticValidator:
                 'missing_exhibits': []
             }
         
-        # Find all exhibits from any of the specified locations
+        # Find all exhibits from any of the specified locations using preprocessed columns
         matching_exhibit_ids = []
         
         for _, row in self.exhibits_df.iterrows():
-            find_spot_str = str(row['Find spot']).lower()
+            # Use preprocessed city and country columns
+            city = str(row['find_spot_city']).lower() if pd.notna(row['find_spot_city']) else ''
+            country = str(row['find_spot_country']).lower() if pd.notna(row['find_spot_country']) else ''
             
-            # Check if any required location is in this exhibit's find spot
+            # Check if any required location matches the city or country
             for location in locations:
-                if location.lower() in find_spot_str:
-                    matching_exhibit_ids.append(int(row['id']))
+                location_lower = location.lower()
+                if location_lower in city or location_lower in country:
+                    matching_exhibit_ids.append(int(row['exhibit_number']))
                     break
         
         # Check which matching exhibits were visited
@@ -368,7 +414,7 @@ class SemanticValidator:
             # Check if any required technique is in this exhibit's techniques
             for req_technique in required_techniques:
                 if req_technique.lower() in technique_str:
-                    matching_exhibit_ids.append(int(row['id']))
+                    matching_exhibit_ids.append(int(row['exhibit_number']))
                     break
         
         # Check which matching exhibits were visited
