@@ -2,12 +2,14 @@ import cv2
 import numpy as np
 import json
 import argparse
+import re
+import pandas as pd
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import math
 
 class SemanticValidator:
-    def __init__(self, config_file, visited_exhibits, exhibits_by_section_file=None):
+    def __init__(self, config_file, visited_exhibits, exhibits_by_section_file=None, exhibits_csv_file=None):
         """
         Initialize the semantic validator.
         
@@ -15,6 +17,7 @@ class SemanticValidator:
             config_file: Path to JSON file with exhibit configurations
             visited_exhibits: List of visited exhibit IDs (can be strings or integers)
             exhibits_by_section_file: Optional path to JSON file mapping categories to exhibit numbers
+            exhibits_csv_file: Optional path to CSV file with exhibit metadata for attribute validation
         """
 
         with open(config_file, 'r') as f:
@@ -32,6 +35,363 @@ class SemanticValidator:
         if exhibits_by_section_file:
             with open(exhibits_by_section_file, 'r') as f:
                 self.exhibits_by_section = json.load(f)
+        
+        # Load exhibit metadata for attribute validation
+        self.exhibits_df = None
+        if exhibits_csv_file and Path(exhibits_csv_file).exists():
+            self.exhibits_df = pd.read_csv(exhibits_csv_file)
+            print(f"✓ Loaded {len(self.exhibits_df)} exhibits from {exhibits_csv_file}")
+        
+        # Load attribute constraints
+        self.attribute_constraints = self.config.get("exhibit_attribute_constraints", {})
+
+    
+    def parse_production_date_to_year(self, date_str):
+        """
+        Parse production date string to numeric year(s) for comparison.
+        Handles BC/AD, ranges, and circa notations.
+        
+        Args:
+            date_str: Production date string (e.g., "500BC-490BC", "618-906", "307")
+        
+        Returns:
+            tuple: (start_year, end_year) as integers. BC years are negative.
+                   Returns (None, None) if parsing fails.
+        
+        Examples:
+            "500BC-490BC" -> (-500, -490)
+            "618-906" -> (618, 906)
+            "307" -> (307, 307)
+            "500BC (circa)" -> (-500, -500)
+        """
+        if pd.isna(date_str):
+            return (None, None)
+        
+        date_str = str(date_str).strip()
+        
+        # Remove parenthetical notations like (circa), (about)
+        date_str = re.sub(r'\s*\([^)]+\)', '', date_str)
+        date_str = date_str.strip()
+        
+        # Check for range: "500BC-490BC" or "618-906"
+        range_match = re.match(r'^(\d+)\s*(BC|AD|bc|ad)?\s*-\s*(\d+)\s*(BC|AD|bc|ad)?$', date_str, re.IGNORECASE)
+        if range_match:
+            start_num = int(range_match.group(1))
+            start_bc = range_match.group(2) and range_match.group(2).upper() == 'BC'
+            end_num = int(range_match.group(3))
+            end_bc = range_match.group(4) and range_match.group(4).upper() == 'BC'
+            
+            start_year = -start_num if start_bc else start_num
+            end_year = -end_num if end_bc else end_num
+            
+            return (min(start_year, end_year), max(start_year, end_year))
+        
+        # Check for single year: "307", "500BC", "200 AD"
+        single_match = re.match(r'^(\d+)\s*(BC|AD|bc|ad)?$', date_str, re.IGNORECASE)
+        if single_match:
+            year_num = int(single_match.group(1))
+            is_bc = single_match.group(2) and single_match.group(2).upper() == 'BC'
+            
+            year = -year_num if is_bc else year_num
+            return (year, year)
+        
+        # Unable to parse
+        return (None, None)
+    
+    def validate_date_constraint(self):
+        """
+        Validate that ALL exhibits matching date constraints were visited.
+        
+        Returns:
+            dict: Validation result with 'passed' boolean and details
+        """
+        if not self.attribute_constraints or 'date_constraint' not in self.attribute_constraints:
+            return {
+                'passed': True,
+                'message': "✓ No date constraints specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        if self.exhibits_df is None:
+            return {
+                'passed': False,
+                'message': "✗ Cannot validate date constraints: exhibits CSV not loaded",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        date_constraint = self.attribute_constraints['date_constraint']
+        before_year = date_constraint.get('before_year')
+        after_year = date_constraint.get('after_year')
+        in_range = date_constraint.get('in_range')  # [start, end]
+        
+        # Find all exhibits matching the date constraint
+        matching_exhibit_ids = []
+        
+        for _, row in self.exhibits_df.iterrows():
+            start_year, end_year = self.parse_production_date_to_year(row['Production date'])
+            
+            if start_year is None or end_year is None:
+                continue
+            
+            matches = True
+            
+            if before_year is not None:
+                # Both start and end must be before the threshold
+                if end_year >= before_year:
+                    matches = False
+            
+            if after_year is not None:
+                # Both start and end must be after the threshold
+                if start_year <= after_year:
+                    matches = False
+            
+            if in_range is not None:
+                range_start, range_end = in_range
+                # Exhibit must be entirely within range
+                if start_year < range_start or end_year > range_end:
+                    matches = False
+            
+            if matches:
+                matching_exhibit_ids.append(int(row['id']))
+        
+        # Check which matching exhibits were visited
+        visited_matching = [eid for eid in matching_exhibit_ids if eid in self.visited_exhibits]
+        missing = [eid for eid in matching_exhibit_ids if eid not in self.visited_exhibits]
+        
+        passed = len(missing) == 0
+        
+        if len(matching_exhibit_ids) > 0:
+            percentage = (len(visited_matching) / len(matching_exhibit_ids)) * 100
+        else:
+            percentage = 100.0
+        
+        # Build constraint description
+        constraint_desc = []
+        if before_year is not None:
+            constraint_desc.append(f"before {before_year} AD")
+        if after_year is not None:
+            constraint_desc.append(f"after {after_year} AD" if after_year > 0 else f"after {-after_year} BC")
+        if in_range is not None:
+            constraint_desc.append(f"between {in_range[0]}-{in_range[1]}")
+        
+        constraint_str = " AND ".join(constraint_desc) if constraint_desc else "specified dates"
+        
+        return {
+            'passed': passed,
+            'required_exhibits': matching_exhibit_ids,
+            'visited_exhibits': visited_matching,
+            'missing_exhibits': missing,
+            'percentage': round(percentage, 1),
+            'message': f"{'✓' if passed else '✗'} Date constraint ({constraint_str}): {len(visited_matching)}/{len(matching_exhibit_ids)} exhibits visited ({percentage:.1f}%){'' if passed else f' (missing: {missing})'}"
+        }
+    
+    def validate_material_constraint(self):
+        """
+        Validate that ALL exhibits matching material constraints were visited.
+        
+        Returns:
+            dict: Validation result with 'passed' boolean and details
+        """
+        if not self.attribute_constraints or 'material_constraint' not in self.attribute_constraints:
+            return {
+                'passed': True,
+                'message': "✓ No material constraints specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        if self.exhibits_df is None:
+            return {
+                'passed': False,
+                'message': "✗ Cannot validate material constraints: exhibits CSV not loaded"
+            }
+        
+        material_constraint = self.attribute_constraints['material_constraint']
+        required_materials = material_constraint.get('materials', [])
+        
+        if not required_materials:
+            return {
+                'passed': True,
+                'message': "✓ No specific materials specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        # Find all exhibits with any of the required materials
+        matching_exhibit_ids = []
+        
+        for _, row in self.exhibits_df.iterrows():
+            material_str = str(row['Materials']).lower()
+            
+            # Check if any required material is in this exhibit's materials
+            for req_material in required_materials:
+                if req_material.lower() in material_str:
+                    matching_exhibit_ids.append(int(row['id']))
+                    break
+        
+        # Check which matching exhibits were visited
+        visited_matching = [eid for eid in matching_exhibit_ids if eid in self.visited_exhibits]
+        missing = [eid for eid in matching_exhibit_ids if eid not in self.visited_exhibits]
+        
+        passed = len(missing) == 0
+        
+        if len(matching_exhibit_ids) > 0:
+            percentage = (len(visited_matching) / len(matching_exhibit_ids)) * 100
+        else:
+            percentage = 100.0
+        
+        material_str = ", ".join(required_materials)
+        
+        return {
+            'passed': passed,
+            'required_exhibits': matching_exhibit_ids,
+            'visited_exhibits': visited_matching,
+            'missing_exhibits': missing,
+            'percentage': round(percentage, 1),
+            'message': f"{'✓' if passed else '✗'} Material constraint ({material_str}): {len(visited_matching)}/{len(matching_exhibit_ids)} exhibits visited ({percentage:.1f}%){'' if passed else f' (missing: {missing})'}"
+        }
+    
+    def validate_find_spot_constraint(self):
+        """
+        Validate that ALL exhibits matching find spot constraints were visited.
+        
+        Returns:
+            dict: Validation result with 'passed' boolean and details
+        """
+        if not self.attribute_constraints or 'find_spot_constraint' not in self.attribute_constraints:
+            return {
+                'passed': True,
+                'message': "✓ No find spot constraints specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        if self.exhibits_df is None:
+            return {
+                'passed': False,
+                'message': "✗ Cannot validate find spot constraints: exhibits CSV not loaded"
+            }
+        
+        find_spot_constraint = self.attribute_constraints['find_spot_constraint']
+        locations = find_spot_constraint.get('locations', [])
+        
+        if not locations:
+            return {
+                'passed': True,
+                'message': "✓ No specific locations specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        # Find all exhibits from any of the specified locations
+        matching_exhibit_ids = []
+        
+        for _, row in self.exhibits_df.iterrows():
+            find_spot_str = str(row['Find spot']).lower()
+            
+            # Check if any required location is in this exhibit's find spot
+            for location in locations:
+                if location.lower() in find_spot_str:
+                    matching_exhibit_ids.append(int(row['id']))
+                    break
+        
+        # Check which matching exhibits were visited
+        visited_matching = [eid for eid in matching_exhibit_ids if eid in self.visited_exhibits]
+        missing = [eid for eid in matching_exhibit_ids if eid not in self.visited_exhibits]
+        
+        passed = len(missing) == 0
+        
+        if len(matching_exhibit_ids) > 0:
+            percentage = (len(visited_matching) / len(matching_exhibit_ids)) * 100
+        else:
+            percentage = 100.0
+        
+        location_str = ", ".join(locations)
+        
+        return {
+            'passed': passed,
+            'required_exhibits': matching_exhibit_ids,
+            'visited_exhibits': visited_matching,
+            'missing_exhibits': missing,
+            'percentage': round(percentage, 1),
+            'message': f"{'✓' if passed else '✗'} Find spot constraint ({location_str}): {len(visited_matching)}/{len(matching_exhibit_ids)} exhibits visited ({percentage:.1f}%){'' if passed else f' (missing: {missing})'}"
+        }
+    
+    def validate_technique_constraint(self):
+        """
+        Validate that ALL exhibits matching technique constraints were visited.
+        
+        Returns:
+            dict: Validation result with 'passed' boolean and details
+        """
+        if not self.attribute_constraints or 'technique_constraint' not in self.attribute_constraints:
+            return {
+                'passed': True,
+                'message': "✓ No technique constraints specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        if self.exhibits_df is None:
+            return {
+                'passed': False,
+                'message': "✗ Cannot validate technique constraints: exhibits CSV not loaded"
+            }
+        
+        technique_constraint = self.attribute_constraints['technique_constraint']
+        required_techniques = technique_constraint.get('techniques', [])
+        
+        if not required_techniques:
+            return {
+                'passed': True,
+                'message': "✓ No specific techniques specified",
+                'required_exhibits': [],
+                'visited_exhibits': [],
+                'missing_exhibits': []
+            }
+        
+        # Find all exhibits with any of the required techniques
+        matching_exhibit_ids = []
+        
+        for _, row in self.exhibits_df.iterrows():
+            technique_str = str(row['Technique']).lower()
+            
+            # Check if any required technique is in this exhibit's techniques
+            for req_technique in required_techniques:
+                if req_technique.lower() in technique_str:
+                    matching_exhibit_ids.append(int(row['id']))
+                    break
+        
+        # Check which matching exhibits were visited
+        visited_matching = [eid for eid in matching_exhibit_ids if eid in self.visited_exhibits]
+        missing = [eid for eid in matching_exhibit_ids if eid not in self.visited_exhibits]
+        
+        passed = len(missing) == 0
+        
+        if len(matching_exhibit_ids) > 0:
+            percentage = (len(visited_matching) / len(matching_exhibit_ids)) * 100
+        else:
+            percentage = 100.0
+        
+        technique_str = ", ".join(required_techniques)
+        
+        return {
+            'passed': passed,
+            'required_exhibits': matching_exhibit_ids,
+            'visited_exhibits': visited_matching,
+            'missing_exhibits': missing,
+            'percentage': round(percentage, 1),
+            'message': f"{'✓' if passed else '✗'} Technique constraint ({technique_str}): {len(visited_matching)}/{len(matching_exhibit_ids)} exhibits visited ({percentage:.1f}%){'' if passed else f' (missing: {missing})'}"
+        }
 
     
     def validate_at_least_n_exhibit_visits(self):
@@ -183,11 +543,21 @@ class SemanticValidator:
         category_validation = self.validate_category_coverage()
         specific_validation = self.validate_specific_exhibits()
         
+        # Run attribute-based validations if exhibit CSV was loaded
+        date_validation = self.validate_date_constraint()
+        material_validation = self.validate_material_constraint()
+        find_spot_validation = self.validate_find_spot_constraint()
+        technique_validation = self.validate_technique_constraint()
+        
         # Overall pass requires all checks to pass
         overall_passed = (
             count_validation['passed'] and 
             category_validation['passed'] and 
-            specific_validation['passed']
+            specific_validation['passed'] and
+            date_validation['passed'] and
+            material_validation['passed'] and
+            find_spot_validation['passed'] and
+            technique_validation['passed']
         )
         
         # Print results
@@ -202,6 +572,15 @@ class SemanticValidator:
                     print(f"    Visited: {result['visited_from_category']}")
         
         print(f"{specific_validation['message']}")
+        
+        # Print attribute validation results
+        if self.exhibits_df is not None:
+            print("\n" + "-"*60)
+            print("Attribute-Based Validations:")
+            print(f"{date_validation['message']}")
+            print(f"{material_validation['message']}")
+            print(f"{find_spot_validation['message']}")
+            print(f"{technique_validation['message']}")
         
         print("\n" + "-"*60)
         print(f"Overall Semantic Validation: {'✅ PASSED' if overall_passed else '❌ FAILED'}")
@@ -226,12 +605,34 @@ class SemanticValidator:
                 "percentage": count_validation.get('percentage', 0.0)
             },
             "exhibit_category_coverage": exhibit_category_coverage,
+            "attribute_validations": {
+                "date_constraint": {
+                    "valid": date_validation['passed'],
+                    "percentage": date_validation.get('percentage', 0.0)
+                },
+                "material_constraint": {
+                    "valid": material_validation['passed'],
+                    "percentage": material_validation.get('percentage', 0.0)
+                },
+                "find_spot_constraint": {
+                    "valid": find_spot_validation['passed'],
+                    "percentage": find_spot_validation.get('percentage', 0.0)
+                },
+                "technique_constraint": {
+                    "valid": technique_validation['passed'],
+                    "percentage": technique_validation.get('percentage', 0.0)
+                }
+            }
         }, {
             'overall_passed': overall_passed,
             'visited_exhibits': self.visited_exhibits,
             'count_validation': count_validation,
             'category_validation': category_validation,
             'specific_validation': specific_validation,
+            'date_validation': date_validation,
+            'material_validation': material_validation,
+            'find_spot_validation': find_spot_validation,
+            'technique_validation': technique_validation,
             'summary': {
                 'total_exhibits_visited': len(self.visited_exhibits),
                 'required_minimum': self.at_least_n_exhibits_to_cover,
