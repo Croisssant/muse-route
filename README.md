@@ -41,7 +41,8 @@ This benchmark evaluates Vision-Language Models (VLMs) on their ability to gener
 
 - **Partial SCAR (Semantic Constraint Alignment Rate)**:
   - Visit a larger minimum number of exhibits (e.g., at least 15 exhibits)
-  - Cover required exhibit categories (e.g., at least one "Roman" exhibit)
+  - Visit specific required exhibits (e.g., exhibits [1, 96, 97, 98, 99, 100])
+ 
 
 **Success Criteria**: Generate a physically valid route that avoids all obstacles, respects restricted zones, respects user's visit requirements and passes through mandatory gallery regions.
 
@@ -54,12 +55,13 @@ This benchmark evaluates Vision-Language Models (VLMs) on their ability to gener
 **Constraints**:
 
 - **All Easy and Medium constraints**, plus:
-- **SCAR (Semantic Constraint Alignment Rate)**:
-  - Visit specific required exhibits (e.g., exhibits [1, 96, 97, 98, 99, 100])
 
 - **Full SCSR**:
   - Respect distance budget constraints (if applicable)
   - Must avoid restricted galleries (PURPLE boxes marked "restricted") + Must pass through required galleries (PURPLE boxes marked "must_see")
+
+- **Partial SCAR (Semantic Constraint Alignment Rate)**:
+  - Cover required exhibit categories (e.g., at least one "Roman" exhibit)
 
 **Success Criteria**: Generate a route that satisfies all spatial validity checks AND all semantic coverage requirements while staying within the distance budget.
 
