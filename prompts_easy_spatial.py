@@ -32,77 +32,74 @@ img_width, img_height = image.size
 with open(input_image_path, "rb") as f:
     image_base64 = base64.b64encode(f.read()).decode("utf-8")
 
-# -------- STEP 1: No Exhibit Selection for Easy Level --------
-# Easy level has NO semantic requirements - just navigate from entrance to exit
-print("EASY LEVEL: No exhibit selection required - navigating from entrance to exit only")
 
-# -------- STEP 2: Route Planning (Easy Level) --------
+
+# -------- STEP 1: Route Planning --------
 system_prompt_route = f"""
-        You are a museum path planning assistant generating a single drawable polyline on top of the museum image.
+You are a museum path planning assistant generating a single drawable polyline on top of the museum image.
 
-        Your ONLY goal is to create a simple, valid path from entrance to exit.
+Your ONLY goal is to create a simple, valid path from entrance to exit.
 
-        ### Visual legend
-        - BLUE outlines = walls and structural barriers. Never cross them.
-        - ORANGE boxes = restricted areas. Never enter them.
-        - PURPLE boxes = gallery areas. You can choose to visit or ignore it.
-        - GREEN box = entrance. The route must start inside it.
-        - YELLOW box = exit. The route must end inside it.
-        - Numbered circles = exhibits (you can ignore these).
+### Visual legend
+- BLUE outlines = walls and structural barriers. Never cross them.
+- ORANGE boxes = restricted areas. Never enter them.
+- PURPLE boxes = gallery areas. Passing through this area is mandatory,
+- GREEN box = entrance. The route must start inside it.
+- YELLOW box = exit. The route must end inside it.
+- Numbered circles = exhibits (visit at least ONE of these, DO NOT collide with them).
 
-        ### Non-negotiable constraints
-        - Start inside the entrance box (GREEN), with the first point clearly inside rather than on the border.
-        - End inside the exit box (YELLOW), with the last point clearly inside rather than on the border.
-        - Stay inside the valid museum floor area at all times.
-        - Never cross walls (BLUE outlines).
-        - Never draw through exhibit markers or obstacle geometry.
-        - Never enter restricted areas (ORANGE boxes).
-        - The path must be continuous and physically plausible.
+### Non-negotiable constraints
+- The path must be continuous and physically plausible.
+- Never cross walls (BLUE outlines).
+- Never draw through exhibit markers (NUMBERED circles) or obstacle geometry.
+- Stay inside the valid museum floor area at all times.
+- Start inside the entrance box (GREEN), with the first point clearly inside rather than on the border.
+- End inside the exit box (YELLOW), with the last point clearly inside rather than on the border.
+- Never enter restricted areas (ORANGE boxes).
 
-        ### Planning strategy
-        - First, silently identify all visible no-go areas: walls, restricted areas, exhibit markers, and dead-end risky spaces.
-        - Second, build a safe corridor skeleton from entrance to exit that stays legal from start to finish.
-        - Third, convert the final walk into a single continuous polyline.
-        - If uncertain, choose the safer route instead of the shorter shortcut.
-        - After drafting the route, trim any detour that does not help connect the legal start-to-exit walk.
-        - Focus solely on creating a valid, direct path from entrance to exit.
-        - The route should be simple and efficient without unnecessary detours.
-        - Keep it short and straightforward.
+### Planning strategy
+- First, silently identify all visible no-go areas: walls, restricted areas, exhibit markers, and dead-end risky spaces.
+- Second, build a safe corridor skeleton from entrance to exit that stays legal from start to finish.
+- Third, convert the final walk into a single continuous polyline.
+- If uncertain, choose the safer route instead of the shorter shortcut.
+- After drafting the route, trim any detour that does not help connect the legal start-to-exit walk.
+- Focus solely on creating a valid, direct path from entrance to exit.
+- The route should be simple and efficient without unnecessary detours.
+- Keep it simple and straightforward.
 
-        ### Path construction rules
-        - The path must be one continuous, physically plausible walking route.
-        - Use a multi-point polyline with enough waypoints to show the path clearly.
-        - Return between 15 and 25 coordinate pairs (fewer is better if path is direct).
-        - Consecutive points should trace a sensible walking path through open floor space.
-        - Every straight segment between consecutive points must stay in legal open floor space.
-        - If a straight segment would clip a wall, restricted area, or exhibit marker, add waypoints to go around.
-        - Prefer orthogonal walking segments (horizontal and vertical) where practical.
-        - Favor open corridors and wider spaces over risky shortcuts near hazards.
-        - Maintain visible clearance from restricted-area borders and walls.
+### Path construction rules
+- The path must be one continuous, physically plausible walking route.
+- Use a multi-point polyline with enough waypoints to show the path clearly.
+- Consecutive points should trace a sensible walking path through open floor space.
+- Every straight segment between consecutive points must stay in legal open floor space.
+- If a straight segment would clip a wall, restricted area, or exhibit marker, add waypoints to go around.
+- Prefer orthogonal walking segments (horizontal and vertical) where practical.
+- Favor open corridors and wider spaces over risky shortcuts near hazards.
+- Maintain visible clearance from restricted-area borders and walls.
 
-        ### Coordinate constraints
-        - Image width: {img_width} pixels
-        - Image height: {img_height} pixels
-        - Every coordinate must be an integer pair [x, y].
-        - Every coordinate must satisfy 0 <= x < {img_width} and 0 <= y < {img_height}.
-        - Do not output floats.
-        - Do not output tuples, objects, strings, or nested wrappers.
+### Coordinate constraints
+- Image width: {img_width} pixels
+- Image height: {img_height} pixels
+- Every coordinate must be an integer pair [x, y].
+- Every coordinate must satisfy 0 <= x < {img_width} and 0 <= y < {img_height}.
+- Do not output floats.
+- Do not output tuples, objects, strings, or nested wrappers.
 
-        ### Output format
-        - Output ONLY a JSON array of coordinate pairs.
-        - The first item must be the start point (inside GREEN entrance box).
-        - The last item must be the exit point (inside YELLOW exit box).
-        - Valid example: [[120, 410], [145, 410], [170, 405]]
-        - Invalid examples: [120, 410], {{"route": [[120, 410]]}}, [[120.5, 410.2]], [[120, 410]]
-        - No commentary, no markdown fences, no explanation.
-    """
+### Output format
+- Output ONLY a JSON array of coordinate pairs.
+- The first item must be the start point (inside GREEN entrance box).
+- The last item must be the exit point (inside YELLOW exit box).
+- Valid example: [[120, 410], [145, 410], [170, 405]]
+- Invalid examples: [120, 410], {{"route": [[120, 410]]}}, [[120.5, 410.2]], [[120, 410]]
+- No commentary, no markdown fences, no explanation.
+"""
 
 user_prompt_route = f"""
 Create a simple, direct route from entrance (GREEN box) to exit (YELLOW box).
 
 Remember:
-- Visit any exhibits as you see fit
-- NO mandatory gallery visits required - do as you see fit
+- visit at least ONE exhibit as you see fit
+- gallery visits required
 - the route must be a continuous drawable JSON polyline,
 - the first point must be comfortably inside the entrance (GREEN),
 - the last point must be comfortably inside the exit (YELLOW),
@@ -169,7 +166,7 @@ draw.line(route, fill="red", width=5)
 image.save(output_image_path)
 print(f"Route drawn and saved to {output_image_path}")
 
-# -------- STEP 3: Route Validation --------
+# -------- STEP 2: Route Validation --------
 print("\n" + "=" * 70)
 print("STEP 3: Running Validation Pipeline (main.py)")
 print("=" * 70 + "\n")
@@ -227,7 +224,6 @@ try:
             print(f"No Restricted Area Violations: {not summary['scsr'].get('restricted_area_violations', True)}")
 
         print("=" * 70)
-        print("Note: Easy level does NOT require gallery visits or exhibit coverage")
 
 except subprocess.CalledProcessError as e:
     print("Error running main.py validation:")
