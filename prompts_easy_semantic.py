@@ -11,8 +11,9 @@ from pathlib import Path
 
 from build_prompts import build_required_categories, build_required_OR_attributes, build_required_AND_attributes, build_visit_distance
 from prompts_utils import (load_image, exhibit_selection, prompt_gpt, 
-                           parse_route_and_save, select_fields, 
-                           discover_complexity_and_layouts, build_paths)
+                           parse_route_and_save, 
+                           discover_complexity_and_layouts, build_paths, 
+                           extract_scar_validations, extract_validation_fields)
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
 if sys.platform == 'win32':
@@ -24,7 +25,11 @@ load_dotenv(override=True)
 client = OpenAI()
 
 # ========== USER CONFIGURATION ==========
-# All parameters below can be easily modified by the user
+
+# Metric fields to include in final_results.json
+SVR_FIELDS = ['connectivity', 'wall_crossings', 'exhibit_collision', 'out_of_area_violations']
+SCSR_FIELDS = ['start_end_location']
+SCAR_FIELDS = ['exhibit_category_coverage', 'attribute_validations']
 
 # Model configuration
 MODEL = "gpt-5.4"
@@ -323,9 +328,11 @@ def process_layout(layout_folder, model_name, difficulty, complexity):
                 validation_data = json.load(f)
             
             summary = validation_data['validation_summary']
-            svr = summary["svr"]
-            scsr = summary["scsr"]
-            scar = select_fields(summary["scar"], ["start_end_location"])
+            
+            # Extract and filter validation fields  
+            svr = extract_validation_fields(summary["svr"], SVR_FIELDS)
+            scsr = extract_validation_fields(summary["scsr"], SCSR_FIELDS)
+            scar = extract_scar_validations(summary["scar"], configs, SCAR_FIELDS)
             
             data = {
                 "svr": svr,

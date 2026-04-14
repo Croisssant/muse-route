@@ -6,10 +6,9 @@
     "out_of_area_violations": false
   },
   "scsr": {
-    "start_end_location": true,
-    "must_pass_regions": false,
-    "restricted_area_violations": true,
-    "distance_budget": true
+    "start_end_location": false
   },
-  "scar": {}
+  "scar": {
+    "attribute_validations": false
+  }
 }

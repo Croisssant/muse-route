@@ -11,7 +11,7 @@
   "distance_budget_in_mm": 1000000000,
   "exhibit_see_distance_in_mm": 1500,
 
-  "exhibit_categories_to_cover": ["Greek"],
+  "exhibit_categories_to_cover": [],
   "at_least_n_exhibits_to_cover": 1,
   "specific_exhibit_to_cover": [],
 
@@ -36,10 +36,10 @@
         "in_range": []
       },
       "material_constraint": {
-        "materials": ["gold"]
+        "materials": []
       },
       "find_spot_constraint": {
-        "locations": ["Japan"]
+        "locations": []
       },
       "technique_constraint": {
         "techniques": []

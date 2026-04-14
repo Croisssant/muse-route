@@ -190,6 +190,61 @@ def discover_complexity_and_layouts(base_dir, complexity_mode, specific_complexi
     return sorted(results)
 
 
+def filter_and_validate_attributes(scar_full, configs):
+    """
+    Filter attribute validations based on config and return simplified boolean result.
+    
+    Args:
+        scar_full: Full scar results from validation_results.json
+        configs: Configuration dict containing exhibit_attribute_constraints
+    
+    Returns:
+        Dict with start_end_location and attribute_validations (boolean)
+    """
+    
+    # Filter attribute_validations based on config constraints
+    attribute_constraints = configs.get("exhibit_attribute_constraints", None)
+    if attribute_constraints:
+        # Get list of non-empty constraint names from config
+        filtered_or_constraints = filter_non_empty_fields(
+            attribute_constraints, ["_comment", "combined_constraint"]
+        )
+        
+        and_constraints = attribute_constraints.get("combined_constraint", None)
+        filtered_and_constraints = []
+        if and_constraints:
+            filtered_and_constraints = filter_non_empty_fields(
+                and_constraints, ["_combined_comment"]
+            )
+        
+        # Get attribute validations from results
+        attribute_validations_full = scar_full.get("attribute_validations", {})
+        
+        # Filter to only include constraints that have values in config
+        filtered_attribute_validations = {}
+        
+        # Add OR constraints that have values
+        for constraint_name in filtered_or_constraints:
+            if constraint_name in attribute_validations_full:
+                filtered_attribute_validations[constraint_name] = \
+                    attribute_validations_full[constraint_name]
+        
+        # Add combined constraint if it has any values
+        if filtered_and_constraints and "combined_constraint" in attribute_validations_full:
+            filtered_attribute_validations["combined_constraint"] = \
+                attribute_validations_full["combined_constraint"]
+        
+        # Check if ALL filtered constraints are valid
+        # True only if all constraints pass, False otherwise
+        if filtered_attribute_validations:
+            all_valid = all(
+                validation.get("valid", False) 
+                for validation in filtered_attribute_validations.values()
+            )
+    
+    return all_valid
+
+
 def build_paths(layout_folder, model_name, difficulty, complexity, 
                 base_results_dir, filenames):
     """
@@ -230,3 +285,89 @@ def build_paths(layout_folder, model_name, difficulty, complexity,
     }
     
     return input_paths, output_paths
+
+
+def filter_non_empty_fields(dict: dict, exclude_keys:list[str]) -> list[str]:
+    """
+    GET dictionary keys with non empty values
+    """
+    return [
+        k
+        for k, v in dict.items()
+        if k not in exclude_keys and any(
+            not (isinstance(inner, list) and len(inner) == 0)
+            for inner in v.values()
+        )
+    ]
+
+
+def extract_validation_fields(validation_dict, fields_to_include):
+    """
+    Extract specified fields from validation dictionaries (svr, scsr).
+    
+    Args:
+        validation_dict: Dictionary like svr or scsr from validation_results.json
+        fields_to_include: List of field names to extract (e.g., ['connectivity', 'wall_crossings'])
+    
+    Returns:
+        Dict with only the specified fields
+    """
+    return {
+        field: validation_dict[field]
+        for field in fields_to_include
+        if field in validation_dict
+    }
+
+
+def extract_scar_validations(scar_full, configs, fields_to_include):
+    """
+    Extract specified scar fields and convert to simplified boolean format.
+    
+    Args:
+        scar_full: Full scar results from validation_results.json
+        configs: Configuration dict (for attribute validation filtering)
+        fields_to_include: List of field names to extract 
+            (e.g., ['specific_exhibit_coverage', 'at_least_n_exhibits_coverage', 
+                    'exhibit_category_coverage', 'attribute_validations'])
+    
+    Returns:
+        Dict with simplified boolean values for specified fields
+    """
+    result = {}
+    
+    for field in fields_to_include:
+        if field not in scar_full:
+            continue
+        
+        field_data = scar_full[field]
+        
+        # Handle exhibit_category_coverage - exclude if no categories in config
+        if field == "exhibit_category_coverage":
+            # Check if categories are specified in config
+            categories_to_cover = configs.get("exhibit_categories_to_cover", [])
+            if categories_to_cover and len(categories_to_cover) > 0:
+                # Only include if categories exist in config
+                if isinstance(field_data, dict):
+                    all_categories_valid = all(
+                        category_data.get("valid", False)
+                        for category_data in field_data.values()
+                    )
+                    result[field] = all_categories_valid
+                else:
+                    result[field] = False
+            # If no categories in config, skip this field (don't add to result)
+        
+        # Handle attribute_validations with config filtering
+        elif field == "attribute_validations":
+            # Use the dedicated function for attribute validation
+            result[field] = filter_and_validate_attributes(scar_full, configs)
+        
+        # Handle standard validation fields with 'valid' key
+        elif isinstance(field_data, dict) and "valid" in field_data:
+            result[field] = field_data["valid"]
+        
+        # Handle other fields as-is
+        else:
+            result[field] = field_data
+    
+    return result
