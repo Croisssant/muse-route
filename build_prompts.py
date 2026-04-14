@@ -28,10 +28,15 @@ def build_required_OR_attributes(required_exhibit_attributes):
 
     if required_exhibit_attributes:
 
-        required_OR_exhibit_attributes = {k: required_exhibit_attributes[k] for k in 
-                                          ['date_constraint', 'material_constraint', 
-                                          'find_spot_constraint', 'technique_constraint']
-                                         }
+        required_OR_exhibit_attributes = {
+            k: cleaned
+            for k, v in required_exhibit_attributes.items()
+            if k not in ["_comment", "combined_constraint"] and (cleaned := {
+                inner_key: inner_value
+                for inner_key, inner_value in v.items()
+                if not (isinstance(inner_value, list) and len(inner_value) == 0)
+            })
+        }
 
         required_OR_exhibit_attributes_json = json.dumps(required_OR_exhibit_attributes)
 
@@ -64,7 +69,18 @@ def build_required_AND_attributes(required_exhibit_attributes):
     if required_exhibit_attributes:
 
         combined_constraint = required_exhibit_attributes["combined_constraint"]
-        required_AND_exhibit_attributes_json = json.dumps(combined_constraint)
+
+        filtered_contraints = {
+            k: cleaned
+            for k, v in combined_constraint.items()
+            if k != "_combined_comment" and (cleaned := {
+                inner_key: inner_value
+                for inner_key, inner_value in v.items()
+                if not (isinstance(inner_value, list) and len(inner_value) == 0)
+            })
+        }
+
+        required_AND_exhibit_attributes_json = json.dumps(filtered_contraints)
 
         required_AND_attribute_requirement = (
             f"""    - The final route must include all exhibits with matching attributes that satisfies all the attributes 

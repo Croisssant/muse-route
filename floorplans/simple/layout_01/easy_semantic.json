@@ -27,7 +27,7 @@
       "locations": ["China"]
     },
     "technique_constraint": {
-      "techniques": ["painted"]
+      "techniques": []
     },
 
     "combined_constraint": {

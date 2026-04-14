@@ -1,74 +1,72 @@
-# Museum Route Planning Benchmark
+Metrics:
 
-This benchmark evaluates Vision-Language Models (VLMs) on their ability to generate valid museum routes with increasing task complexity.
+SVR
 
-## Difficulty Levels
+- connectivity
+- wall_crossings
+- exhibit_collision
+- out_of_area_violations
 
-### Easy: Basic Spatial Navigation
+SCSR
 
-**Goal**: Navigate from entrance to exit while respecting basic spatial constraints only.
+- start_end_location
+- must_pass_regions
+- restricted_area_violations
+- distance_budget
 
-**Constraints**:
+SCAR
 
-- **Basic SVR (Spatial Validity Rate)**
-  - Maintain route connectivity (single connected path)
-  - Never cross walls (BLUE outlines)
-  - Never collide with exhibits (numbered circles)
-  - Stay within valid floor area (no out-of-bounds)
+- specific_exhibit_coverage
+- at_least_n_exhibits_coverage
+- exhibit_category_coverage (visit all exhibits under this category to pass)
+- attribute_validations
+  - or (visit all exhibits that matches any of these attributes to pass):
+    - date
+    - material
+    - find_spot
+    - technique
+  - and (visit all exhibits that matches all of the attributes to pass):
+    - date
+    - material
+    - find_spot
+    - technique
 
-- **Basic SCSR (Spatial Constraint Satisfaction Rate)**:
-  - Start at entrance (GREEN box)
-  - End at exit (YELLOW box)
-  - Never enter restricted areas (ORANGE boxes)
+Validation Metrics By Difficulty:
+Easy-spatial:
 
-- **Basic SCAR (Semantic Constraint Alignment Rate)**:
-  - Visit at least ONE exhibit
+1. Full SVR
+2. SCSR
+   - start_end_location
+   - must_pass_regions
+   - restricted_area_violations
+3. SCAR
+   - at_least_n_exhibits_coverage (At least 1)
 
-**Success Criteria**: Generate a connected route from entrance to exit that stays within the floor plan boundaries.
+Easy-semantic:
 
----
+1. Full SVR
+2. SCSR
+   - start_end_location
+3. SCAR
+   - exhibit_category_coverage / attribute_validations (or / and)
 
-### Medium: Partial Spatial and Semantic Constraints
+Medium Task:
 
-**Goal**: Navigate from entrance to exit while respecting additional spatial and semantics constraints.
+1. Full SVR
+2. SCSR
+   - start_end_location
+   - must_pass_regions
+   - restricted_area_violations
+3. SCAR
+   - at_least_n_exhibits_coverage (Higher number around 10)
+   - exhibit_category_coverage / attribute_validations (or / and)
 
-**Constraints**:
+Hard Task:
 
-- **All Easy constraints**, plus:
-
-- **Additional SCSR (Spatial Constraint Satisfaction Rate)**:
-  - Must pass through required galleries (PURPLE boxes marked "must_see")
-
-- **Partial SCAR (Semantic Constraint Alignment Rate)**:
-  - Visit a larger minimum number of exhibits (e.g., at least 15 exhibits)
-  - Visit specific required exhibits (e.g., exhibits [1, 96, 97, 98, 99, 100])
- 
-
-**Success Criteria**: Generate a physically valid route that avoids all obstacles, respects restricted zones, respects user's visit requirements and passes through mandatory gallery regions.
-
----
-
-### Hard: Full Spatial and Semantic Constraints
-
-**Goal**: Navigate with all spatial constraints while satisfying semantic exhibit requirements.
-
-**Constraints**:
-
-- **All Easy and Medium constraints**, plus:
-
-- **Full SCSR**:
-  - Respect distance budget constraints (if applicable)
-  - Must avoid restricted galleries (PURPLE boxes marked "restricted") + Must pass through required galleries (PURPLE boxes marked "must_see")
-
-- **Partial SCAR (Semantic Constraint Alignment Rate)**:
-  - Cover required exhibit categories (e.g., at least one "Roman" exhibit)
-
-**Success Criteria**: Generate a route that satisfies all spatial validity checks AND all semantic coverage requirements while staying within the distance budget.
-
----
-
-**Additional Complexity for ALL levels**:
-
-- Exhibits must be visited within detection range (~183 pixels)
-- Route must be optimized to visit all required exhibits efficiently
-- Semantic requirements may conflict with spatial optimization (e.g., required exhibit near restricted area)
+1. Full SVR
+2. Full SCSR
+3. SCAR
+   - specific_exhibit_coverage
+   - at_least_n_exhibits_coverage (Higher number around 25)
+   - exhibit_category_coverage
+   - attribute_validations (or / and)
