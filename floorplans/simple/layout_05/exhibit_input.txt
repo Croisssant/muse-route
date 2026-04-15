@@ -1,0 +1,8 @@
+1-12: Greek
+13-31: Mesopotamian
+61-62: Mesopotamian
+32-47: Japanese
+68-69: Japanese
+48-49: Tang dynasty
+63-67: Tang dynasty
+50-60: Ancient Egyptian

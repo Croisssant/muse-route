@@ -5,41 +5,48 @@
     "normal": "No restrictions"
   },
   "gallery_configs": {
-    "gallery_room_1": "restricted",
-    "gallery_open_space_1": "must_see"
+    "gallery_room_01": "must_see"
   },
   "distance_budget_in_mm": 1000000000,
   "exhibit_see_distance_in_mm": 1500,
-
-  "exhibit_categories_to_cover": ["Greek"],
-  "at_least_n_exhibits_to_cover": 15,
+  "exhibit_categories_to_cover": [
+    "Greek"
+  ],
+  "at_least_n_exhibits_to_cover": 5,
   "specific_exhibit_to_cover": [],
-
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
-      "in_range": ["550 BC", "530 BC"]
+      "in_range": [
+        "618",
+        "906"
+      ]
     },
     "material_constraint": {
-      "materials": ["pottery"]
+      "materials": [
+        "pottery",
+        "glazed composition"
+      ]
     },
     "find_spot_constraint": {
-      "locations": ["China"]
+      "locations": [
+        "Egypt",
+        "China"
+      ]
     },
     "technique_constraint": {
-      "techniques": ["painted"]
+      "techniques": []
     },
-
     "combined_constraint": {
       "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",
       "date_constraint": {
         "in_range": []
       },
       "material_constraint": {
-        "materials": ["gold"]
+        "materials": []
       },
       "find_spot_constraint": {
-        "locations": ["Japan"]
+        "locations": []
       },
       "technique_constraint": {
         "techniques": []

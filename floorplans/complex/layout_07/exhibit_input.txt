@@ -1,0 +1,6 @@
+1-15: Greek
+44: Greek
+51: Greek
+16-43: Mesopotamian
+45-50: Japanese
+52-64: Japanese
