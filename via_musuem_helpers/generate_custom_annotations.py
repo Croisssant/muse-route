@@ -43,7 +43,7 @@ def generate_annotated_image(image_path, annotations_data, annotation_types, out
     try:
         font = ImageFont.truetype("arial.ttf", 16)
         font_small = ImageFont.truetype("arial.ttf", 12)
-        font_exhibit = ImageFont.truetype("arial.ttf", 22)
+        font_exhibit = ImageFont.truetype("arial.ttf", 40)
         font_legend = ImageFont.truetype("arial.ttf", 14)
     except:
         font = ImageFont.load_default()

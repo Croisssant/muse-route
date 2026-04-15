@@ -72,7 +72,7 @@ def convert_via_to_museum_layout(via_json_path, output_path):
         gallery_name = av.get('3', '')
         
         # Process based on shape type
-        if shape_type == 6:  # Polyline
+        if shape_type in [6, 7]:  # Polyline (6 = open, 7 = closed polygon)
             # Extract points
             points = []
             for i in range(1, len(xy), 2):
