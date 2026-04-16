@@ -5,7 +5,7 @@
     "normal": "No restrictions"
   },
   "gallery_configs": {
-    "gallery_room_01": "must_see"
+    "gallery_01": "must_see"
   },
   "distance_budget_in_mm": 1000000000,
   "exhibit_see_distance_in_mm": 1500,

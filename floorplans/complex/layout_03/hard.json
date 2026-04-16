@@ -5,7 +5,7 @@
     "normal": "No restrictions"
   },
   "gallery_configs": {
-    "gallery_room_01": "must_see"
+    "gallery_01": "must_see"
   },
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
@@ -15,18 +15,18 @@
   ],
   "at_least_n_exhibits_to_cover": 15,
   "specific_exhibit_to_cover": [
-    7,
-    44,
-    46,
-    33,
-    45
+    10,
+    41,
+    6,
+    26,
+    13
   ],
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": [
-        "664 BC",
-        "510 BC"
+        "618",
+        "906"
       ]
     },
     "material_constraint": {

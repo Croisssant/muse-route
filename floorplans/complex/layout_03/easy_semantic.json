@@ -19,12 +19,12 @@
       ]
     },
     "material_constraint": {
-      "materials": [
-        "metal"
-      ]
+      "materials": []
     },
     "find_spot_constraint": {
-      "locations": []
+      "locations": [
+        "Iraq"
+      ]
     },
     "technique_constraint": {
       "techniques": []

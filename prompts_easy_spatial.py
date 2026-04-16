@@ -4,10 +4,14 @@ import subprocess
 import os
 import sys
 import io
-
+import argparse
+import logging
 from dotenv import load_dotenv
 from openai import OpenAI
+from tqdm import tqdm
+
 from pathlib import Path
+
 from build_prompts import build_visit_distance
 from prompts_utils import (load_image, prompt_gpt, 
                            parse_route_and_save, 
@@ -23,47 +27,161 @@ if sys.platform == 'win32':
 load_dotenv(override=True)
 client = OpenAI()
 
-# ========== USER CONFIGURATION ==========
+
+def parse_arguments():
+    """Parse command-line arguments for user configurations."""
+    parser = argparse.ArgumentParser(
+        description='Museum Route Planning - Batch Processor (Easy Spatial) with configurable parameters',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with all defaults
+  python prompts_easy_spatial.py
+
+  # Override model and difficulty
+  python prompts_easy_spatial.py --model gpt-4 --difficulty easy_spatial
+
+  # Process specific complexity
+  python prompts_easy_spatial.py --complexity-mode single --complexity complex
+
+  # Process multiple complexities
+  python prompts_easy_spatial.py --complexity-mode list --complexity simple complex
+
+  # Process specific layouts
+  python prompts_easy_spatial.py --layout-mode list --layouts layout_01 layout_02
+
+  # Customize validation fields
+  python prompts_easy_spatial.py --svr-fields connectivity wall_crossings
+        """
+    )
+    
+    # Validation fields
+    parser.add_argument('--svr-fields', nargs='+', 
+                       default=['connectivity', 'wall_crossings', 'exhibit_collision', 'out_of_area_violations'],
+                       help='SVR validation fields (default: connectivity wall_crossings exhibit_collision out_of_area_violations)')
+    
+    parser.add_argument('--scsr-fields', nargs='+',
+                       default=['start_end_location', 'must_pass_regions', 'restricted_area_violations'],
+                       help='SCSR validation fields (default: start_end_location must_pass_regions restricted_area_violations)')
+    
+    parser.add_argument('--scar-fields', nargs='+',
+                       default=['at_least_n_exhibits_coverage'],
+                       help='SCAR validation fields (default: at_least_n_exhibits_coverage)')
+    
+    # Model configuration
+    parser.add_argument('--model', type=str, default='gpt-5.4',
+                       help='Model name to use (default: gpt-5.4)')
+    
+    parser.add_argument('--reasoning', type=str, default=None,
+                       help='Reasoning mode (default: None)')
+    
+    # Task configuration
+    parser.add_argument('--difficulty', type=str, default='easy_spatial',
+                       help='Difficulty level for output folder structure (default: easy_spatial)')
+    
+    # Complexity selection
+    parser.add_argument('--complexity-mode', type=str, 
+                       choices=['all', 'single', 'list'],
+                       default='single',
+                       help='Complexity selection mode (default: single)')
+    
+    parser.add_argument('--complexity', nargs='+', type=str,
+                       default=['simple'],
+                       help='Specific complexity level(s) (default: simple)')
+    
+    # Layout selection
+    parser.add_argument('--layout-mode', type=str,
+                       choices=['all', 'single', 'list'],
+                       default='all',
+                       help='Layout selection mode (default: all)')
+    
+    parser.add_argument('--layouts', nargs='+', type=str,
+                       default=None,
+                       help='Specific layout(s) when using single or list mode')
+    
+    # Directory paths
+    parser.add_argument('--floorplan-dir', type=str, default='floorplans',
+                       help='Base directory for floorplans (default: floorplans)')
+    
+    parser.add_argument('--results-dir', type=str, default='results',
+                       help='Base directory for results (default: results)')
+    
+    # Filenames
+    parser.add_argument('--image-file', type=str, default='annotated_layout.png',
+                       help='Image filename (default: annotated_layout.png)')
+    
+    parser.add_argument('--config-file', type=str, default='easy_spatial.json',
+                       help='Config filename (default: easy_spatial.json)')
+    
+    parser.add_argument('--exhibits-file', type=str, default='exhibit_list.json',
+                       help='Exhibits list filename (default: exhibit_list.json)')
+    
+    parser.add_argument('--exhibits-csv-file', type=str, default='exhibits.csv',
+                       help='Exhibits CSV filename (default: exhibits.csv)')
+    
+    parser.add_argument('--annotations-file', type=str, default='layout_annotations.json',
+                       help='Annotations filename (default: layout_annotations.json)')
+    
+    # Progress tracking
+    parser.add_argument('--no-progress', action='store_true',
+                       help='Disable progress bar (useful for automation/logging)')
+    
+    parser.add_argument('--progress-position', type=int, default=0,
+                       help='Progress bar position for concurrent execution (default: 0)')
+    
+    return parser.parse_args()
+
+
+# ========== PARSE ARGUMENTS ==========
+args = parse_arguments()
+
 # Metric fields to include in final_results.json
-SVR_FIELDS = ['connectivity', 'wall_crossings', 'exhibit_collision', 'out_of_area_violations']
-SCSR_FIELDS = ['start_end_location', 'must_pass_regions', 'restricted_area_violations']
-SCAR_FIELDS = ['at_least_n_exhibits_coverage']
+SVR_FIELDS = args.svr_fields
+SCSR_FIELDS = args.scsr_fields
+SCAR_FIELDS = args.scar_fields
 
 # Model configuration
-MODEL = "gpt-5.4"
-REASONING = None
+MODEL = args.model
+REASONING = args.reasoning
+
+# Build model folder name (same logic as master script)
+# If reasoning is provided, folder name is [model]([reasoning]), otherwise just [model]
+if REASONING:
+    MODEL_FOLDER = f"{MODEL}({REASONING})"
+else:
+    MODEL_FOLDER = MODEL
 
 # Task configuration
-DIFFICULTY = "easy_spatial"      # Used for output folder structure
+DIFFICULTY = args.difficulty
 
 # Complexity selection mode
-# Options:
-#   - "all": Process all complexity levels (simple, complex, medium)
-#   - "single": Process one specific complexity level
-#   - "list": Process multiple specific complexity levels
-COMPLEXITY_MODE = "single"
-SPECIFIC_COMPLEXITIES = "simple"  # For single mode
-# SPECIFIC_COMPLEXITIES = ["simple", "complex"]  # For list mode
+COMPLEXITY_MODE = args.complexity_mode
+if COMPLEXITY_MODE == 'single':
+    SPECIFIC_COMPLEXITIES = args.complexity[0]
+elif COMPLEXITY_MODE == 'list':
+    SPECIFIC_COMPLEXITIES = args.complexity
+else:
+    SPECIFIC_COMPLEXITIES = None
 
 # Layout selection mode
-# Options:
-#   - "all": Process all layout_* folders in selected complexity levels
-#   - "single": Process one specific layout
-#   - "list": Process multiple specific layouts
-LAYOUT_MODE = "all"
-SPECIFIC_LAYOUTS = None  # For single mode: "layout_01"
-# SPECIFIC_LAYOUTS = ["layout_01", "layout_03", "layout_05"]  # For list mode
+LAYOUT_MODE = args.layout_mode
+if LAYOUT_MODE == 'single' and args.layouts:
+    SPECIFIC_LAYOUTS = args.layouts[0]
+elif LAYOUT_MODE == 'list':
+    SPECIFIC_LAYOUTS = args.layouts
+else:
+    SPECIFIC_LAYOUTS = args.layouts
 
 # Directory paths
-BASE_FLOORPLAN_DIR = Path("floorplans")
-BASE_RESULTS_DIR = Path("results")
+BASE_FLOORPLAN_DIR = Path(args.floorplan_dir)
+BASE_RESULTS_DIR = Path(args.results_dir) / MODEL_FOLDER
 
-# Default filenames (modify if your files have different names)
-IMAGE_FILENAME = "annotated_layout.png"
-CONFIG_FILENAME = "easy_spatial.json"      # Config file to load from each layout
-EXHIBITS_FILENAME = "exhibit_list.json"
-EXHIBITS_CSV_FILENAME = "exhibits.csv"      # CSV file for validation
-ANNOTATIONS_FILENAME = "layout_annotations.json"
+# Default filenames
+IMAGE_FILENAME = args.image_file
+CONFIG_FILENAME = args.config_file
+EXHIBITS_FILENAME = args.exhibits_file
+EXHIBITS_CSV_FILENAME = args.exhibits_csv_file
+ANNOTATIONS_FILENAME = args.annotations_file
 
 # Filename mapping for build_paths function
 FILENAMES = {
@@ -76,17 +194,55 @@ FILENAMES = {
 
 # ========================================
 
-def process_layout(layout_folder, model_name, difficulty, complexity):
-    """Process a single layout folder."""
-    print(f"\n{'='*70}")
-    print(f"Processing: {layout_folder.name}")
-    print(f"{'='*70}\n")
+
+def setup_layout_logger(log_file_path):
+    """Setup a logger for a specific layout."""
+    logger_name = str(log_file_path)
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+    
+    logger.handlers = []
+    
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_file_path, mode='w', encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', 
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+    file_handler.setFormatter(formatter)
+    
+    logger.addHandler(file_handler)
+    
+    return logger
+
+
+def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None):
+    """Process a single layout folder.
+    
+    Args:
+        layout_folder: Path to the layout folder
+        model_name: Name of the model to use
+        difficulty: Difficulty level
+        complexity: Complexity level
+        pbar: Optional tqdm progress bar to update
+    """
+    layout_name = layout_folder.name
+    
+    # Update progress bar if provided
+    if pbar:
+        pbar.set_description(f"[Spatial] {complexity}/{layout_name}")
     
     # Build paths using the utility function
     input_paths, output_paths = build_paths(
         layout_folder, model_name, difficulty, complexity,
         BASE_RESULTS_DIR, FILENAMES
     )
+    
+    # Setup per-layout logger
+    log_file = output_paths['dir'] / "processing.log"
+    logger = setup_layout_logger(log_file)
+    logger.info(f"Starting processing for {complexity}/{layout_name}")
+    logger.info(f"Model: {model_name}, Difficulty: {difficulty}")
     
     # Validate input files exist
     missing_files = []
@@ -95,9 +251,11 @@ def process_layout(layout_folder, model_name, difficulty, complexity):
             missing_files.append(f"{name}: {path}")
     
     if missing_files:
-        print(f"ERROR: Missing required files for {layout_folder.name}:")
+        error_msg = f"ERROR: Missing required files for {layout_folder.name}:"
+        logger.error(error_msg)
         for missing in missing_files:
-            print(f"  - {missing}")
+            logger.error(f"  - {missing}")
+        print(f"✗ {complexity}/{layout_name}: Missing files")
         return False
     
     try:
@@ -202,7 +360,9 @@ def process_layout(layout_folder, model_name, difficulty, complexity):
         4. the path is simple and direct without unnecessary wandering.
         """
         
-        print("Running route planning...")
+        if pbar:
+            pbar.set_description(f"[Spatial] {complexity}/{layout_name} - Route planning")
+        logger.info("Running route planning...")
 
         with open(output_paths['dir'] / "prompt_route_planning.txt", "w", encoding="utf-8") as f:
             f.write("="*70 + "\n")
@@ -217,10 +377,12 @@ def process_layout(layout_folder, model_name, difficulty, complexity):
         text_output_route = prompt_gpt(client, model_name, system_prompt_route, user_prompt_route, image_base64, REASONING)
         
         parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
-        print(f"Route saved to: {output_paths['route_image']}")
+        logger.info(f"Route saved to: {output_paths['route_image']}")
         
         # -------- Route Validation --------
-        print("\nRunning validation pipeline...")
+        if pbar:
+            pbar.set_description(f"[Spatial] {complexity}/{layout_name} - Validation")
+        logger.info("Running validation pipeline...")
         
         # Construct validation_pipeline.py command
         cmd = [
@@ -239,7 +401,13 @@ def process_layout(layout_folder, model_name, difficulty, complexity):
         env = os.environ.copy()
         env['PYTHONIOENCODING'] = 'utf-8'
         result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', env=env)
-        print(result.stdout)
+        
+        # Log validation stdout to file only (not console)
+        if result.stdout:
+            logger.info("Validation pipeline output:")
+            for line in result.stdout.split('\n'):
+                if line.strip():
+                    logger.info(line)
         
         # Load and display validation results
         if output_paths['validation_json'].exists():
@@ -262,23 +430,36 @@ def process_layout(layout_folder, model_name, difficulty, complexity):
             with open(output_paths['final_json'], "w") as f:
                 json.dump(data, f, indent=2)
             
-            print(f"\n✓ Validation complete. Results saved to: {output_paths['final_json']}")
+            logger.info(f"Validation complete. Results saved to: {output_paths['final_json']}")
         
-        print(f"\n✓ Successfully processed: {layout_folder.name}")
+        logger.info(f"Successfully processed: {layout_folder.name}")
+        logger.info(f"Log file saved to: {log_file}")
+        
+        # Write success to console (always print for master script capture)
+        print(f"✓ {complexity}/{layout_name}: Success")
+        
         return True
         
     except subprocess.CalledProcessError as e:
-        print(f"\n✗ Error running validation for {layout_folder.name}:")
-        print(f"Return code: {e.returncode}")
+        error_msg = f"Error running validation for {layout_folder.name}"
+        logger.error(error_msg)
+        logger.error(f"Return code: {e.returncode}")
         if e.stdout:
-            print(f"STDOUT:\n{e.stdout}")
+            logger.error(f"STDOUT:\n{e.stdout}")
         if e.stderr:
-            print(f"STDERR:\n{e.stderr}")
+            logger.error(f"STDERR:\n{e.stderr}")
+        
+        print(f"✗ {complexity}/{layout_name}: Validation failed")
+        
         return False
     except Exception as e:
-        print(f"\n✗ Error processing {layout_folder.name}: {e}")
+        error_msg = f"Error processing {layout_folder.name}: {e}"
+        logger.error(error_msg)
         import traceback
-        traceback.print_exc()
+        logger.error(traceback.format_exc())
+        
+        print(f"✗ {complexity}/{layout_name}: {str(e)[:50]}")
+        
         return False
 
 
@@ -298,7 +479,7 @@ def main():
         print(f"    Specific: {SPECIFIC_LAYOUTS}")
     print(f"  Base directory: {BASE_FLOORPLAN_DIR}")
     print(f"  Config file: {CONFIG_FILENAME}")
-    print(f"  Output directory: {BASE_RESULTS_DIR / MODEL / DIFFICULTY}")
+    print(f"  Output directory: {BASE_RESULTS_DIR / DIFFICULTY}")
     print("="*70)
     
     # Discover complexity levels and layouts based on configuration
@@ -316,13 +497,22 @@ def main():
     for complexity, layout_path in complexity_layouts:
         print(f"  - {complexity}/{layout_path.name}")
     
-    # Process each layout
+    print()  # Empty line before progress bar
+    
+    # Process each layout with progress bar
     results = {}
-    for i, (complexity, layout_folder) in enumerate(complexity_layouts, 1):
-        key = f"{complexity}/{layout_folder.name}"
-        print(f"\n[{i}/{len(complexity_layouts)}] " + "="*60)
-        success = process_layout(layout_folder, MODEL, DIFFICULTY, complexity)
-        results[key] = "Success" if success else "Failed"
+    
+    # Create progress bar (disable if --no-progress flag is set)
+    disable_progress = args.no_progress
+    with tqdm(complexity_layouts, desc="[Spatial] Processing layouts", 
+              unit="layout", disable=disable_progress, position=args.progress_position,
+              bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
+              file=sys.stderr, dynamic_ncols=True, leave=False, mininterval=0.5) as pbar:
+        
+        for complexity, layout_folder in pbar:
+            key = f"{complexity}/{layout_folder.name}"
+            success = process_layout(layout_folder, MODEL, DIFFICULTY, complexity, pbar=pbar)
+            results[key] = "Success" if success else "Failed"
     
     # Summary
     print("\n" + "="*70)

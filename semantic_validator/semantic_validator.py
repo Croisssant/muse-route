@@ -397,7 +397,7 @@ class SemanticValidator:
                 if start_year <= after_year:
                     matches = False
             
-            if in_range is not None:
+            if in_range is not None and len(in_range) == 2:
                 range_start, range_end = in_range
                 # Exhibit must be entirely within range
                 if start_year < range_start or end_year > range_end:
@@ -423,7 +423,7 @@ class SemanticValidator:
             constraint_desc.append(f"before {before_year} AD")
         if after_year is not None:
             constraint_desc.append(f"after {after_year} AD" if after_year > 0 else f"after {-after_year} BC")
-        if in_range is not None:
+        if in_range is not None and len(in_range) == 2:
             constraint_desc.append(f"between {in_range[0]}-{in_range[1]}")
         
         constraint_str = " AND ".join(constraint_desc) if constraint_desc else "specified dates"

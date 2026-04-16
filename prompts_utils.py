@@ -269,8 +269,8 @@ def build_paths(layout_folder, model_name, difficulty, complexity,
         for key, filename in filenames.items()
     }
     
-    # Output directory: results/[model]/[difficulty]/[complexity]/[difficulty]_[layout_name]
-    output_dir = (base_results_dir / model_name / difficulty / 
+    # Output directory: base_results_dir already includes model folder, so just add difficulty/complexity/layout
+    output_dir = (base_results_dir / difficulty / 
                   complexity / f"{difficulty}_{layout_name}")
     output_dir.mkdir(parents=True, exist_ok=True)
     
