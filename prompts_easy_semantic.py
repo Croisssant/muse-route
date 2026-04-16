@@ -389,7 +389,7 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
         - After drafting the route, trim any detour that does not help cover a selected exhibit, reach a required gallery, or connect the legal start-to-exit walk.
 
         ### Path construction rules
-        - The path must be one continuous, physically plausible walking route with exactly two endpoints.
+        - The path must be one continuous, physically plausible walking route with EXACTLY two endpoints.
         - The path must not branch, split, fork, or intersect at any point.
         - IF the route doubles back, the return path must not overlap the original path; it must be visibly offset so that two separate lines are clearly distinguishable, indicating a U-turn.
         - Use a multi-point polyline with many waypoints, not a single point and not just 2 points.

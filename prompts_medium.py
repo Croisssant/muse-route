@@ -1,14 +1,24 @@
-import base64
 import json
-import re
 import subprocess
 import os
 import sys
 import io
+import argparse
+import logging
 from dotenv import load_dotenv
 from openai import OpenAI
-from PIL import Image, ImageDraw
-from build_prompts import build_system_prompt, build_user_prompt, build_selection_prompt
+from tqdm import tqdm
+
+from pathlib import Path
+
+from build_prompts import (build_required_categories, build_required_OR_attributes, 
+                           build_required_AND_attributes, build_visit_distance,
+                           build_min_num_exhibits_to_cover)
+
+from prompts_utils import (load_image, exhibit_selection, prompt_gpt, 
+                           parse_route_and_save, 
+                           discover_complexity_and_layouts, build_paths, 
+                           extract_scar_validations, extract_validation_fields)
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
 if sys.platform == 'win32':
@@ -19,177 +29,367 @@ if sys.platform == 'win32':
 load_dotenv(override=True)
 client = OpenAI()
 
-# -------- File paths --------
-config_path = "./config.json"
-input_image_path = "./images/annotated_walls_museum_layout_02/original_images/annotated_walls_museum_layout_02.png"
-output_image_path = "./images/annotated_walls_museum_layout_02/route_images/chatgpt_route_2.png"
-exhibits_json_path = "./original_floorplans/museum_layout_01/exhibit_list.json"
-annotations_json_path = "./original_floorplans/museum_layout_01/museum_layout_annotations.json"
 
-# -------- Load exhibit JSON --------
-with open(exhibits_json_path, "r", encoding="utf-8") as f:
-    exhibits_json = json.load(f)
+def parse_arguments():
+    """Parse command-line arguments for user configurations."""
+    parser = argparse.ArgumentParser(
+        description='Museum Route Planning - Batch Processor with configurable parameters',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with all defaults
+  python prompts_medium.py
 
-with open(config_path, "r", encoding="utf-8") as f:
-    configs = json.load(f)
+  # Override model and difficulty
+  python prompts_medium.py --model gpt-4 --difficulty medium
 
-with open(annotations_json_path, "r", encoding="utf-8") as f:
-    annotations_json = json.load(f)
+  # Process specific complexity
+  python prompts_medium.py --complexity-mode single --complexity complex
 
-required_exhibit_ids = configs.get("specific_exhibit_to_cover", [])
-required_exhibit_ids_json = json.dumps(required_exhibit_ids)
-required_exhibit_count = len(required_exhibit_ids)
+  # Process multiple complexities
+  python prompts_medium.py --complexity-mode list --complexity simple complex
 
-required_categories = configs.get("exhibit_categories_to_cover", [])
-required_categories_json = json.dumps(required_categories)
+  # Process specific layouts
+  python prompts_medium.py --layout-mode list --layouts layout_01 layout_02
 
-min_exhibits_to_cover = configs.get("at_least_n_exhibits_to_cover", required_exhibit_count)
-selection_target_count = max(min_exhibits_to_cover, required_exhibit_count)
+  # Customize validation fields
+  python prompts_medium.py --svr-fields connectivity wall_crossings
+        """
+    )
+    
+    # Validation fields
+    parser.add_argument('--svr-fields', nargs='+', 
+                       default=['connectivity', 'wall_crossings', 'exhibit_collision', 'out_of_area_violations'],
+                       help='SVR validation fields to include in final_results.json (default: connectivity wall_crossings exhibit_collision out_of_area_violations)')
+    
+    parser.add_argument('--scsr-fields', nargs='+',
+                       default=['start_end_location'],
+                       help='SCSR validation fields to include in final_results.json (default: start_end_location)')
+    
+    parser.add_argument('--scar-fields', nargs='+',
+                       default=['exhibit_category_coverage', 'attribute_validations'],
+                       help='SCAR validation fields to include in final_results.json (default: exhibit_category_coverage attribute_validations)')
+    
+    # Model configuration
+    parser.add_argument('--model', type=str, default='gpt-5.4',
+                       help='Model name to use (default: gpt-5.4)')
+    
+    parser.add_argument('--reasoning', type=str, default=None,
+                       help='Reasoning mode (default: None)')
+    
+    # Task configuration
+    parser.add_argument('--difficulty', type=str, default='medium',
+                       help='Difficulty level for output folder structure (default: medium)')
+    
+    # Complexity selection
+    parser.add_argument('--complexity-mode', type=str, 
+                       choices=['all', 'single', 'list'],
+                       default='single',
+                       help='Complexity selection mode: all (process all), single (one specific), list (multiple specific) (default: single)')
+    
+    parser.add_argument('--complexity', nargs='+', type=str,
+                       default=['simple'],
+                       help='Specific complexity level(s) when using single or list mode (default: simple)')
+    
+    # Layout selection
+    parser.add_argument('--layout-mode', type=str,
+                       choices=['all', 'single', 'list'],
+                       default='all',
+                       help='Layout selection mode: all (process all), single (one specific), list (multiple specific) (default: all)')
+    
+    parser.add_argument('--layouts', nargs='+', type=str,
+                       default=None,
+                       help='Specific layout(s) when using single or list mode (default: None)')
+    
+    # Directory paths
+    parser.add_argument('--floorplan-dir', type=str, default='floorplans',
+                       help='Base directory for floorplans (default: floorplans)')
+    
+    parser.add_argument('--results-dir', type=str, default='results',
+                       help='Base directory for results (default: results)')
+    
+    # Filenames
+    parser.add_argument('--image-file', type=str, default='annotated_layout.png',
+                       help='Image filename (default: annotated_layout.png)')
+    
+    parser.add_argument('--config-file', type=str, default='medium.json',
+                       help='Config filename to load from each layout (default: medium.json)')
+    
+    parser.add_argument('--exhibits-file', type=str, default='exhibit_list.json',
+                       help='Exhibits list filename (default: exhibit_list.json)')
+    
+    parser.add_argument('--exhibits-csv-file', type=str, default='exhibits.csv',
+                       help='Exhibits CSV filename for validation (default: exhibits.csv)')
+    
+    parser.add_argument('--annotations-file', type=str, default='layout_annotations.json',
+                       help='Annotations filename (default: layout_annotations.json)')
+    
+    # Progress tracking
+    parser.add_argument('--no-progress', action='store_true',
+                       help='Disable progress bar (useful for automation/logging)')
+    
+    parser.add_argument('--progress-position', type=int, default=0,
+                       help='Progress bar position for concurrent execution (default: 0)')
+    
+    return parser.parse_args()
 
-visit_distance_mm = configs.get("exhibit_see_distance_in_mm")
-distance_entries = annotations_json.get("distance_in_mm", [])
-mm_per_px = distance_entries[0].get("mm_per_px") if distance_entries else None
-visit_distance_px = int(round(visit_distance_mm / mm_per_px)) if visit_distance_mm and mm_per_px else None
-visit_distance_text = (
-    f"{visit_distance_px} pixels"
-    if visit_distance_px is not None
-    else f"the configured visit radius derived from {visit_distance_mm} mm"
-)
 
-required_category_requirement = (
-    f"    3. The final route must include at least one exhibit from each required category in {required_categories_json}.\n"
-    if required_categories
-    else "    3. There are no required exhibit categories configured for this run.\n"
-)
-required_category_checklist = (
-    f"    2. At least one exhibit from each required category in {required_categories_json} is present.\n"
-    if required_categories
-    else "    2. There are no required exhibit-category checks for this run.\n"
-)
-required_category_prompt_line = (
-    f"Ensure the selection covers each required category in {required_categories_json}.\n"
-    if required_categories
-    else ""
-)
+# ========== PARSE ARGUMENTS ==========
+args = parse_arguments()
 
-# -------- Image info --------
-image = Image.open(input_image_path)
-img_width, img_height = image.size
+# Metric fields to include in final_results.json
+SVR_FIELDS = args.svr_fields
+SCSR_FIELDS = args.scsr_fields
+SCAR_FIELDS = args.scar_fields
 
-# Read image as base64
-with open(input_image_path, "rb") as f:
-    image_base64 = base64.b64encode(f.read()).decode("utf-8")
+# Model configuration
+MODEL = args.model
+REASONING = args.reasoning
 
-# -------- STEP 1: Exhibit Selection --------
-user_preference = "I only want to visit Roman Exhibits"
+# Build model folder name (same logic as master script)
+# If reasoning is provided, folder name is [model]([reasoning]), otherwise just [model]
+if REASONING:
+    MODEL_FOLDER = f"{MODEL}({REASONING})"
+else:
+    MODEL_FOLDER = MODEL
 
-# Build prompt for selecting exhibits
-system_prompt_selection = f"""
-    You are a museum assistant AI selecting exhibits for a route-planning benchmark.
+# Task configuration
+DIFFICULTY = args.difficulty
 
-    Here is the full exhibit list in JSON:
-    {exhibits_json}
+# Complexity selection mode
+COMPLEXITY_MODE = args.complexity_mode
+# Handle single vs list mode for complexities
+if COMPLEXITY_MODE == 'single':
+    SPECIFIC_COMPLEXITIES = args.complexity[0]  # Take first element for single mode
+elif COMPLEXITY_MODE == 'list':
+    SPECIFIC_COMPLEXITIES = args.complexity  # Use as list for list mode
+else:  # 'all' mode
+    SPECIFIC_COMPLEXITIES = None
 
-    Hard benchmark requirements that override user preference when there is any conflict:
-    1. The final route must include exhibit numbers {required_exhibit_ids_json}.
-    2. The final route must cover at least {min_exhibits_to_cover} exhibits total.
-    {required_category_requirement}
+# Layout selection mode
+LAYOUT_MODE = args.layout_mode
+# Handle single vs list mode for layouts
+if LAYOUT_MODE == 'single' and args.layouts:
+    SPECIFIC_LAYOUTS = args.layouts[0]  # Take first element for single mode
+elif LAYOUT_MODE == 'list':
+    SPECIFIC_LAYOUTS = args.layouts  # Use as list for list mode
+else:  # 'all' mode or no layouts specified
+    SPECIFIC_LAYOUTS = args.layouts
 
-    Selection process:
-    1. Start by locking in every hard-required exhibit {required_exhibit_ids_json}. These required exhibits are mandatory and cannot be removed.
-    2. Add additional exhibits until there are exactly {selection_target_count} unique exhibit numbers.
-    3. Strongly prefer exhibits that match the user preference.
-    4. When several exhibits satisfy the preference equally well, prefer the subset that forms a compact visit plan with less backtracking and fewer long jumps.
-    5. Avoid redundant choices that spread the route across distant regions when a more compact preference-matching option exists.
-    6. If there is uncertainty, prefer a conservative set that is easier to route legally and compactly rather than a sprawling set.
-    7. If the user preference conflicts with the hard benchmark requirements, satisfy the hard benchmark requirements first and then maximize preference match.
-    8. Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
-    9. The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
-    10. Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
-    11. Prefer optional exhibits that can be covered by one or two compact clusters rather than optional exhibits scattered across many distant regions.
+# Directory paths
+BASE_FLOORPLAN_DIR = Path(args.floorplan_dir)
+BASE_RESULTS_DIR = Path(args.results_dir) / MODEL_FOLDER
 
-    Validation checklist before responding:
-    1. {required_exhibit_ids_json} are all present.
-    {required_category_checklist}    
-    3. The list contains exactly {selection_target_count} unique integers.
-    4. The order should represent a plausible visit order, not a random order.
-    5. If any required exhibit is missing, replace optional exhibits until all required exhibits are present before responding.
+# Default filenames
+IMAGE_FILENAME = args.image_file
+CONFIG_FILENAME = args.config_file
+EXHIBITS_FILENAME = args.exhibits_file
+EXHIBITS_CSV_FILENAME = args.exhibits_csv_file
+ANNOTATIONS_FILENAME = args.annotations_file
 
-    Output rules:
-    1. Output ONLY a JSON array of exhibit numbers.
-    2. Do not output markdown, labels, commentary, or any other text.
-    3. The response must be valid JSON, for example: [1, 5, 9]
+# Filename mapping for build_paths function
+FILENAMES = {
+    'image': IMAGE_FILENAME,
+    'config': CONFIG_FILENAME,
+    'exhibits': EXHIBITS_FILENAME,
+    'exhibits_csv': EXHIBITS_CSV_FILENAME,
+    'annotations': ANNOTATIONS_FILENAME
+}
+
+# ========================================
+
+
+def setup_layout_logger(log_file_path):
+    """Setup a logger for a specific layout."""
+    # Create a unique logger name based on the log file
+    logger_name = str(log_file_path)
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+    
+    # Remove any existing handlers
+    logger.handlers = []
+    
+    # Create file handler
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_file_path, mode='w', encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', 
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+    file_handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    logger.addHandler(file_handler)
+    
+    return logger
+
+
+def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None):
+    """Process a single layout folder.
+    
+    Args:
+        layout_folder: Path to the layout folder
+        model_name: Name of the model to use
+        difficulty: Difficulty level
+        complexity: Complexity level
+        pbar: Optional tqdm progress bar to update
     """
-user_prompt_selection = f"""
-User preference: {user_preference}
+    layout_name = layout_folder.name
+    
+    # Update progress bar if provided
+    if pbar:
+        pbar.set_description(f"[Medium] {complexity}/{layout_name}")
+    
+    # Build paths using the utility function
+    input_paths, output_paths = build_paths(
+        layout_folder, model_name, difficulty, complexity,
+        BASE_RESULTS_DIR, FILENAMES
+    )
+    
+    # Setup per-layout logger
+    log_file = output_paths['dir'] / "processing.log"
+    logger = setup_layout_logger(log_file)
+    logger.info(f"Starting processing for {complexity}/{layout_name}")
+    logger.info(f"Model: {model_name}, Difficulty: {difficulty}")
+    
+    # Validate input files exist
+    missing_files = []
+    for name, path in input_paths.items():
+        if not path.exists():
+            missing_files.append(f"{name}: {path}")
+    
+    if missing_files:
+        error_msg = f"ERROR: Missing required files for {layout_folder.name}:"
+        logger.error(error_msg)
+        for missing in missing_files:
+            logger.error(f"  - {missing}")
+        print(f"✗ {complexity}/{layout_name}: Missing files")
+        return False
+    
+    try:
+        # -------- Load data --------
+        with open(input_paths['exhibits'], "r", encoding="utf-8") as f:
+            exhibits_list = json.load(f)
+        
+        with open(input_paths['config'], "r", encoding="utf-8") as f:
+            configs = json.load(f)
+        
+        with open(input_paths['annotations'], "r", encoding="utf-8") as f:
+            annotations_json = json.load(f)
+        
+        # -------- Build prompts --------
+        required_category_requirement, required_category_checklist, required_category_prompt_line = build_required_categories(configs.get("exhibit_categories_to_cover", None))
+        required_OR_attribute_requirement, required_OR_attribute_checklist, required_OR_attribute_prompt_line = build_required_OR_attributes(configs.get("exhibit_attribute_constraints", None))
+        required_AND_attribute_requirement, required_AND_attribute_checklist, required_AND_attribute_prompt_line = build_required_AND_attributes(configs.get("exhibit_attribute_constraints", None))
+        
+        min_exhibit_requirement, min_exhibit_selection_process, min_exhibit_checklist, min_exhibit_prompt_line = build_min_num_exhibits_to_cover(configs.get("at_least_n_exhibits_to_cover", 0), 0)
 
-Return exactly {selection_target_count} exhibit numbers that satisfy the benchmark requirements above.
-Follow the validation checklist before you answer.
-The JSON array order should be the recommended visiting order.
-Avoid orders that bounce between distant exhibit groups.
-Do not submit any answer that omits one of {required_exhibit_ids_json}.
-Prefer optional exhibits that let the route stay compact instead of visiting many separate clusters.
-{required_category_prompt_line}The JSON array should remain valid even if the config values change in a future run.
-"""
+        visit_distance_text = build_visit_distance(configs.get("exhibit_see_distance_in_mm"), annotations_json.get("distance_in_mm", []))
 
-response_selection = client.responses.create(
-    model="gpt-5.4",
-    input=[
-        {"role": "system", "content": system_prompt_selection},
-        {"role": "user", "content": user_prompt_selection}
-    ]
-)
+        # -------- Image info --------
+        image_base64, img_width, img_height = load_image(input_paths['image'])
+        
+        # -------- Exhibit Selection --------
+        system_prompt_selection = f"""
+        You are a museum assistant AI selecting exhibits for a route-planning benchmark.
 
-# Parse selected exhibit IDs
-text_output_selection = response_selection.output_text.strip()
-try:
-    selected_ids = json.loads(text_output_selection)
-except json.JSONDecodeError:
-    # Fallback extraction
-    match = re.search(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]", text_output_selection)
-    if match:
-        selected_ids = json.loads(match.group())
-    else:
-        raise ValueError(f"Failed to parse exhibit IDs:\n{text_output_selection}")
+        Here is the full exhibit list in JSON:
+        {exhibits_list}
 
-print("Selected exhibit IDs:", selected_ids)
+        Medium benchmark requirements that override user preference when there is any conflict:
+        {required_category_requirement}
+        {required_OR_attribute_requirement}
+        {required_AND_attribute_requirement}
+        {min_exhibit_requirement}
 
-# Filter exhibits
-filtered_exhibits = [e for e in exhibits_json if e["exhibit_number"] in selected_ids]
+        Selection process:
+        {min_exhibit_selection_process}
+        - Strongly prefer exhibits that match the user preference.
+        - When several exhibits satisfy the preference equally well, prefer the subset that forms a compact visit plan with less backtracking and fewer long jumps.
+        - Avoid redundant choices that spread the route across distant regions when a more compact preference-matching option exists.
+        - If there is uncertainty, prefer a conservative set that is easier to route legally and compactly rather than a sprawling set.
+        - If the user preference conflicts with the Medium benchmark requirements, satisfy the Medium benchmark requirements first and then maximize preference match.
+        - Order the final exhibit numbers in a sensible visiting sequence for a compact walk from entrance to exit.
+        - The order should move smoothly through nearby regions instead of jumping back and forth between distant parts of the museum.
+        - Prefer an order that reduces backtracking and reduces the need to cross the same corridor multiple times.
+        - Prefer optional exhibits that can be covered by one or two compact clusters rather than optional exhibits scattered across many distant regions.
 
-# -------- STEP 2: Route Planning --------
-system_prompt_route = f"""
+        Validation checklist before responding:
+        {min_exhibit_checklist}
+        {required_category_checklist}
+        {required_OR_attribute_checklist}
+        {required_AND_attribute_checklist}
+        - The order should represent a plausible visit order, not a random order.
+        - If any required exhibit is missing, replace optional exhibits until all required exhibits are present before responding.
+
+        Output rules:
+        1. Output ONLY a JSON array of exhibit numbers.
+        2. Do not output markdown, labels, commentary, or any other text.
+        3. The response must be valid JSON, for example: [1, 5, 9]
+        """
+        
+        user_prompt_selection = f"""
+        {min_exhibit_prompt_line}
+        Follow the validation checklist before you answer.
+        The JSON array order should be the recommended visiting order.
+        Avoid orders that bounce between distant exhibit groups.
+        Prefer optional exhibits that let the route stay compact instead of visiting many separate clusters.
+        {required_category_prompt_line}
+        {required_OR_attribute_prompt_line}
+        {required_AND_attribute_prompt_line}
+        The JSON array should remain valid even if the config values change in a future run.
+        """
+        
+        if pbar:
+            pbar.set_description(f"[Medium] {complexity}/{layout_name} - Exhibit selection")
+        logger.info("Running exhibit selection...")
+
+        with open(output_paths['dir'] / "prompt_exhibit_selection.txt", "w", encoding="utf-8") as f:
+            f.write("="*70 + "\n")
+            f.write("SYSTEM PROMPT - ROUTE PLANNING\n")
+            f.write("="*70 + "\n\n")
+            f.write(system_prompt_selection)
+            f.write("\n\n" + "="*70 + "\n")
+            f.write("USER PROMPT - ROUTE PLANNING\n")
+            f.write("="*70 + "\n\n")
+            f.write(user_prompt_selection)
+
+        text_output_selection = prompt_gpt(client, model_name, system_prompt_selection, user_prompt_selection, image_base64, REASONING)
+        gpt_selected_exhibits = exhibit_selection(text_output_selection, exhibits_list)
+        # print(f"Selected exhibits: {gpt_selected_exhibits}")
+        
+        # -------- Route Planning --------
+        system_prompt_route = f"""
         You are a museum path planning assistant generating a single drawable polyline on top of the museum image.
 
-        Produce a route that satisfies the benchmark exactly. Treat the following as HARD requirements.
+        Your ONLY goal is to create a simple, valid path from entrance to exit.
 
         ### Visual legend
         - BLUE outlines = walls and structural barriers. Never cross them.
         - ORANGE boxes = restricted areas. Never enter them.
-        - PURPLE boxes = gallery areas. Some may be must-see or restricted.
+        - PURPLE boxes = gallery areas. Passing through this area is mandatory.
         - GREEN box = entrance. The route must start inside it.
         - YELLOW box = exit. The route must end inside it.
-        - Numbered circles = exhibits.
+        - Numbered circles = exhibits (DO NOT collide with them).
 
         ### Non-negotiable constraints
-        - Start inside the entrance box, with the first point clearly inside rather than on the border.
-        - End inside the exit box, with the last point clearly inside rather than on the border.
-        - Enter every must-see gallery or region.
-        - Never enter any restricted gallery or restricted region.
-        - Stay inside the valid museum floor area.
-        - Never cross walls.
-        - Never draw through exhibit markers or obstacle geometry.
+        - Start inside the entrance box (GREEN), with the first point clearly inside rather than on the border.
+        - End inside the exit box (YELLOW), with the last point clearly inside rather than on the border.
+        - Enter every must-see gallery (PURPLE boxes).
+        - Never enter restricted areas (ORANGE boxes).
+        - Stay inside the valid museum floor area at all times.
+        - Never cross walls (BLUE outlines).
+        - Never draw through exhibit markers (NUMBERED circles) or obstacle geometry.
         - Visit all selected exhibits and ignore unselected exhibits.
         - Rule priority is: legality first, then correct entrance and exit placement, then required gallery coverage, then selected exhibit coverage, then compactness.
         - Never violate a higher-priority rule to satisfy a lower-priority one.
-
+        - The path must be continuous and physically plausible.
+       
         ### Visit definition
         - A selected exhibit counts as visited when the path comes within {visit_distance_text} of that exhibit's numbered location.
         - Missing even one selected exhibit is a failure.
-        - Missing a required gallery or region is a failure.
         - If a selected exhibit is near a restricted area or obstacle cluster, satisfy the visit from the nearest legal open-floor location instead of entering the risky area.
-        - If a selected exhibit would require entering restricted space or crossing a barrier, approach only as closely as the nearest legal open-floor position allows.
-        - A required gallery visit only needs legal entry into that gallery. Once the route has legally entered the required gallery, leave it again by the nearest legal continuation instead of wandering through adjacent interiors.
 
         ### Planning strategy
         - First, silently identify all visible no-go areas: walls, restricted areas, restricted galleries, exhibit markers, and dead-end risky spaces.
@@ -201,7 +401,9 @@ system_prompt_route = f"""
         - After drafting the route, trim any detour that does not help cover a selected exhibit, reach a required gallery, or connect the legal start-to-exit walk.
 
         ### Path construction rules
-        - The path must be one continuous, physically plausible walking route.
+        - The path must be one continuous, physically plausible walking route with EXACTLY two endpoints.
+        - The path must not branch, split, fork, or intersect at any point.
+        - IF the route doubles back, the return path must not overlap the original path; it must be visibly offset so that two separate lines are clearly distinguishable, indicating a U-turn.
         - Use a multi-point polyline with many waypoints, not a single point and not just 2 points.
         - Consecutive points should trace a sensible walking path through open floor space.
         - Every straight segment between consecutive points must be directly drawable through legal open floor. If a straight segment would clip a wall, restricted area, restricted gallery, or exhibit marker, add another waypoint instead of cutting through.
@@ -223,157 +425,209 @@ system_prompt_route = f"""
 
         ### Output format
         - Output ONLY a JSON array of coordinate pairs.
-        - The first item must be the start point and the last item must be the exit point.
+        - The first item must be the start point (inside GREEN entrance box).
+        - The last item must be the exit point (inside YELLOW exit box).
         - Valid example: [[120, 410], [145, 410], [170, 405]]
         - Invalid examples: [120, 410], {{"route": [[120, 410]]}}, [[120.5, 410.2]], [[120, 410]]
         - No commentary, no markdown fences, no explanation.
-    """
-user_prompt_route = f"""
-Plan a valid route for this exact selected exhibit set:
-{filtered_exhibits}
+        """
+                
+        user_prompt_route = f"""
+        Create a simple, direct route from entrance (GREEN box) to exit (YELLOW box) for this exact selected exhibit set:
+        {gpt_selected_exhibits}
 
-Remember:
-- the route must be a continuous drawable JSON polyline,
-- the first point must be inside the entrance,
-- the last point must be inside the exit,
-- keep the first and last points comfortably inside those boxes, not on their borders,
-- the path must include enough waypoints to show the full walk.
-- treat the selected exhibit list as the preferred visiting order, but reorder when needed to stay legal,
-- Keep the route short and deliberate.
-- Avoid sweeping through large parts of the museum just to pass near extra exhibits.
-- Favor a corridor-like Manhattan path made of horizontal and vertical steps.
-- make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
-- if a must-see gallery is close to restricted space, touch the legal portion you need and then leave immediately rather than traversing deeply through nearby gallery interiors,
-- trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
-- Before answering, silently verify that:
-  1. every segment is legal and does not cut through a wall, restricted area, restricted gallery, or exhibit marker,
-  2. all selected exhibits are covered from legal open floor,
-  3. every must-see gallery is entered,
-  4. the first point is inside the entrance,
-  5. the last point is inside the exit,
-  6. the route is not unnecessarily passing near many unselected exhibits.
-- if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
-"""
+        Remember:
+        - the route must be a continuous drawable JSON polyline,
+        - the first point must be inside the entrance,
+        - the last point must be inside the exit,
+        - keep the first and last points comfortably inside those boxes, not on their borders,
+        - the path must include enough waypoints to show the full walk.
+        - treat the selected exhibit list as the preferred visiting order, but reorder when needed to stay legal,
+        - Keep the route short and deliberate.
+        - Avoid sweeping through large parts of the museum just to pass near extra exhibits.
+        - Favor a corridor-like Manhattan path made of horizontal and vertical steps.
+        - make the first and last coordinates visibly centered inside the green and yellow boxes rather than merely barely inside,
+        - if a must-see gallery is close to restricted space, touch the legal portion you need and then leave immediately rather than traversing deeply through nearby gallery interiors,
+        - trim any waypoint that does not help legality, selected-exhibit coverage, must-see gallery coverage, or direct progress from entrance to exit,
+        - Before answering, silently verify that:
+        1. every segment is legal and does not cut through a wall, restricted area, restricted gallery, or exhibit marker,
+        2. all selected exhibits are covered from legal open floor,
+        3. every must-see gallery is entered,
+        4. the first point is inside the entrance,
+        5. the last point is inside the exit,
+        6. the route is not unnecessarily passing near many unselected exhibits.
+        - if an exhibit is near a restricted area, cover it from the nearest legal open-floor position.
+        """
+        
+        if pbar:
+            pbar.set_description(f"[Medium] {complexity}/{layout_name} - Route planning")
+        logger.info("Running route planning...")
 
-response_route = client.responses.create(
-    model="gpt-5.4",
-    input=[
-        {"role": "system", "content": system_prompt_route},
-        {"role": "user", "content": [
-            {"type": "input_text", "text": user_prompt_route},
-            {"type": "input_image", "image_url": f"data:image/png;base64,{image_base64}"}
-        ]}
-    ]
-)
+        with open(output_paths['dir'] / "prompt_route_planning.txt", "w", encoding="utf-8") as f:
+            f.write("="*70 + "\n")
+            f.write("SYSTEM PROMPT - ROUTE PLANNING\n")
+            f.write("="*70 + "\n\n")
+            f.write(system_prompt_route)
+            f.write("\n\n" + "="*70 + "\n")
+            f.write("USER PROMPT - ROUTE PLANNING\n")
+            f.write("="*70 + "\n\n")
+            f.write(user_prompt_route)
 
-# -------- Parse route --------
-text_output_route = response_route.output_text.strip()
-text_output_route = re.sub(r"^```json\s*|\s*```$", "", text_output_route, flags=re.MULTILINE)
+        text_output_route = prompt_gpt(client, model_name, system_prompt_route, user_prompt_route, image_base64, REASONING)
+        
+        parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
+        logger.info(f"Route saved to: {output_paths['route_image']}")
+        
+        # -------- Route Validation --------
+        if pbar:
+            pbar.set_description(f"[Medium] {complexity}/{layout_name} - Validation")
+        logger.info("Running validation pipeline...")
+        
+        # Construct validation_pipeline.py command
+        cmd = [
+            "python", "validation_pipeline.py",
+            "--route-image", str(output_paths['route_image']),
+            "--original-image", str(input_paths['image']),
+            "--annotations", str(input_paths['annotations']),
+            "--config-file", str(input_paths['config']),
+            "--exhibits-csv-file", str(input_paths['exhibits_csv']),
+            "--extraction-output-image", str(output_paths['extracted_image']),
+            "--validated-output-image", str(output_paths['validated_image']),
+            "--validated-output-json", str(output_paths['validation_json']),
+        ]
+        
+        # Run validation_pipeline.py with UTF-8 encoding for child process
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', env=env)
+        
+        # Log validation stdout to file only (not console)
+        if result.stdout:
+            logger.info("Validation pipeline output:")
+            for line in result.stdout.split('\n'):
+                if line.strip():
+                    logger.info(line)
+        
+        # Load and display validation results
+        if output_paths['validation_json'].exists():
+            with open(output_paths['validation_json'], "r", encoding="utf-8") as f:
+                validation_data = json.load(f)
+            
+            summary = validation_data['validation_summary']
+            
+            # Extract and filter validation fields  
+            svr = extract_validation_fields(summary["svr"], SVR_FIELDS)
+            scsr = extract_validation_fields(summary["scsr"], SCSR_FIELDS)
+            scar = extract_scar_validations(summary["scar"], configs, SCAR_FIELDS)
+            
+            data = {
+                "svr": svr,
+                "scsr": scsr,
+                "scar": scar
+            }
+            
+            with open(output_paths['final_json'], "w") as f:
+                json.dump(data, f, indent=2)
+            
+            logger.info(f"Validation complete. Results saved to: {output_paths['final_json']}")
+        
+        logger.info(f"Successfully processed: {layout_folder.name}")
+        logger.info(f"Log file saved to: {log_file}")
+        
+        # Write success to console (always print for master script capture)
+        print(f"✓ {complexity}/{layout_name}: Success")
+        
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        error_msg = f"Error running validation for {layout_folder.name}"
+        logger.error(error_msg)
+        logger.error(f"Return code: {e.returncode}")
+        if e.stdout:
+            logger.error(f"STDOUT:\n{e.stdout}")
+        if e.stderr:
+            logger.error(f"STDERR:\n{e.stderr}")
+        
+        print(f"✗ {complexity}/{layout_name}: Validation failed")
+        
+        return False
+    except Exception as e:
+        error_msg = f"Error processing {layout_folder.name}: {e}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        print(f"✗ {complexity}/{layout_name}: {str(e)[:50]}")
+        
+        return False
 
-try:
-    route = json.loads(text_output_route)
-except json.JSONDecodeError:
-    match = re.search(r"\[\s*\[.*?\]\s*\]", text_output_route, re.DOTALL)
-    if match:
-        route = json.loads(match.group())
-    else:
-        raise ValueError(f"Failed to parse JSON route:\n{text_output_route}")
 
-if len(route) < 2:
-    raise ValueError(f"Route must contain at least 2 coordinate pairs:\n{text_output_route}")
+def main():
+    """Main execution function."""
+    print("="*70)
+    print("MUSEUM ROUTE PLANNING - BATCH PROCESSOR")
+    print("="*70)
+    print(f"\nConfiguration:")
+    print(f"  Model: {MODEL}")
+    print(f"  Difficulty: {DIFFICULTY}")
+    print(f"  Complexity Mode: {COMPLEXITY_MODE}")
+    if COMPLEXITY_MODE != "all":
+        print(f"    Specific: {SPECIFIC_COMPLEXITIES}")
+    print(f"  Layout Mode: {LAYOUT_MODE}")
+    if LAYOUT_MODE != "all":
+        print(f"    Specific: {SPECIFIC_LAYOUTS}")
+    print(f"  Base directory: {BASE_FLOORPLAN_DIR}")
+    print(f"  Config file: {CONFIG_FILENAME}")
+    print(f"  Output directory: {BASE_RESULTS_DIR / DIFFICULTY}")
+    print("="*70)
+    
+    # Discover complexity levels and layouts based on configuration
+    complexity_layouts = discover_complexity_and_layouts(
+        BASE_FLOORPLAN_DIR,
+        COMPLEXITY_MODE, SPECIFIC_COMPLEXITIES,
+        LAYOUT_MODE, SPECIFIC_LAYOUTS
+    )
+    
+    if not complexity_layouts:
+        print(f"\n✗ No layouts found to process")
+        return
+    
+    print(f"\n✓ Found {len(complexity_layouts)} layout(s) to process:")
+    for complexity, layout_path in complexity_layouts:
+        print(f"  - {complexity}/{layout_path.name}")
+    
+    print()  # Empty line before progress bar
+    
+    # Process each layout with progress bar
+    results = {}
+    
+    # Create progress bar (disable if --no-progress flag is set)
+    disable_progress = args.no_progress
+    with tqdm(complexity_layouts, desc="[Medium] Processing layouts", 
+              unit="layout", disable=disable_progress, position=args.progress_position,
+              bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
+              file=sys.stderr, dynamic_ncols=True, leave=False, mininterval=0.5) as pbar:
+        
+        for complexity, layout_folder in pbar:
+            key = f"{complexity}/{layout_folder.name}"
+            success = process_layout(layout_folder, MODEL, DIFFICULTY, complexity, pbar=pbar)
+            results[key] = "Success" if success else "Failed"
+    
+    # Summary
+    print("\n" + "="*70)
+    print("PROCESSING SUMMARY")
+    print("="*70)
+    successful = sum(1 for status in results.values() if status == "Success")
+    print(f"Total: {len(results)} layouts")
+    print(f"Successful: {successful}")
+    print(f"Failed: {len(results) - successful}")
+    print("\nDetails:")
+    for key, status in results.items():
+        status_symbol = "✓" if status == "Success" else "✗"
+        print(f"  {status_symbol} {key}: {status}")
+    print("="*70)
+    print("\nPipeline complete!")
 
-route = [tuple(point) for point in route]
 
-# -------- Validate route coordinates --------
-invalid_points = []
-for i, (x, y) in enumerate(route):
-    if not (0 <= x < img_width and 0 <= y < img_height):
-        invalid_points.append(f"Point {i}: ({x}, {y})")
-
-if invalid_points:
-    print("WARNING: Found out-of-bounds coordinates:")
-    for point in invalid_points:
-        print(f"  {point}")
-    print(f"  Valid range: 0 <= x < {img_width}, 0 <= y < {img_height}")
-
-# -------- Draw route --------
-draw = ImageDraw.Draw(image)
-draw.line(route, fill="red", width=5)
-
-
-# -------- Save output image --------
-image.save(output_image_path)
-print(f"Route drawn and saved to {output_image_path}")
-
-# -------- STEP 3: Route Validation --------
-print("\n" + "=" * 70)
-print("STEP 3: Running Validation Pipeline (main.py)")
-print("=" * 70 + "\n")
-
-# Extract filenames for main.py
-output_filename = os.path.basename(output_image_path)
-original_filename = os.path.basename(input_image_path)
-
-# Determine the images directory (parent of route_images and original_images)
-images_base_dir = os.path.dirname(os.path.dirname(output_image_path))
-
-# Construct main.py command
-cmd = [
-    "python", "main.py",
-    "--route-image", output_filename,
-    "--original-image", original_filename,
-    "--annotations", "museum_layout_annotations.json",
-    "--images-dir", images_base_dir,
-    "--extraction-output-image", f"extracted_{output_filename}",
-    "--validated-output-image", f"validated_{output_filename}"
-]
-
-print(f"Running: {' '.join(cmd)}\n")
-
-try:
-    # Run main.py validation with UTF-8 encoding for child process
-    env = os.environ.copy()
-    env['PYTHONIOENCODING'] = 'utf-8'
-    result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', env=env)
-    print(result.stdout)
-
-    # Load and display validation results
-    if os.path.exists("validation_results.json"):
-        with open("validation_results.json", "r", encoding="utf-8") as f:
-            validation_data = json.load(f)
-
-        print("\n" + "=" * 70)
-        print("VALIDATION SUMMARY")
-        print("=" * 70)
-        print(json.dumps(validation_data['validation_summary'], indent=2))
-
-        # Print key metrics
-        summary = validation_data['validation_summary']
-        print("\n" + "=" * 70)
-        print("KEY METRICS")
-        print("=" * 70)
-        if 'svr' in summary:
-            print(f"Connectivity: {summary['svr'].get('connectivity', 'N/A')}")
-            print(f"No Wall Crossings: {not summary['svr'].get('wall_crossings', True)}")
-            print(f"No Exhibit Collisions: {not summary['svr'].get('exhibit_collision', True)}")
-            print(f"Within Floor Area: {not summary['svr'].get('out_of_area_violations', True)}")
-
-        if 'scsr' in summary:
-            print(f"Start/End Correct: {summary['scsr'].get('start_end_location', 'N/A')}")
-            print(f"Must-Pass Regions: {summary['scsr'].get('must_pass_regions', 'N/A')}")
-            print(f"No Restricted Area Violations: {not summary['scsr'].get('restricted_area_violations', True)}")
-            print(f"Within Distance Budget: {summary['scsr'].get('distance_budget', 'N/A')}")
-
-        print("=" * 70)
-
-except subprocess.CalledProcessError as e:
-    print("Error running main.py validation:")
-    print(f"Return code: {e.returncode}")
-    if e.stdout:
-        print(f"STDOUT:\n{e.stdout}")
-    if e.stderr:
-        print(f"STDERR:\n{e.stderr}")
-except Exception as e:
-    print(f"Unexpected error during validation: {e}")
-
-print("\nPipeline complete!")
+if __name__ == "__main__":
+    main()

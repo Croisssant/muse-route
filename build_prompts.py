@@ -116,3 +116,47 @@ def build_visit_distance(visit_distance_mm, distance_entries):
     )
 
     return visit_distance_text
+
+
+def build_specific_exhibit_ids(required_exhibit_ids):
+
+    required_exhibit_count = len(required_exhibit_ids)
+
+    if required_exhibit_count > 0:
+        required_exhibit_ids_json = json.dumps(required_exhibit_ids)
+
+        specific_id_requirement = f"- The final route must include exhibit numbers {required_exhibit_ids_json}.\n"
+        specific_id_selection_process = f"- Start by locking in every hard-required exhibit {required_exhibit_ids_json}. These required exhibits are mandatory and cannot be removed.\n"
+        specific_id_checklist = f"- {required_exhibit_ids_json} are all present.\n"
+        specific_id_prompt_line = f"Do not submit any answer that omits one of {required_exhibit_ids_json}.\n"
+
+        return specific_id_requirement, specific_id_selection_process, specific_id_checklist, specific_id_prompt_line, required_exhibit_count
+    
+    else:
+        return "", "", "", "", 0
+    
+
+
+def build_min_num_exhibits_to_cover(at_least_n_exhibits_to_cover, required_exhibit_count):
+
+    selection_target_count = max(at_least_n_exhibits_to_cover, required_exhibit_count)
+
+
+    if selection_target_count > 0:
+
+        min_exhibit_requirement = f" - The final route must cover at least {selection_target_count} exhibits total."
+        min_exhibit_selection_process = f"- Add additional exhibits until there are at least {selection_target_count} unique exhibit numbers."
+        min_exhibit_checklist = f"- The list contains at least {selection_target_count} unique integers."
+        min_exhibit_prompt_line = f"Return at least {selection_target_count} exhibit numbers that satisfy the benchmark requirements above."
+    
+        return min_exhibit_requirement, min_exhibit_selection_process, min_exhibit_checklist, min_exhibit_prompt_line
+
+
+    return "", "", "", ""
+
+
+def build_travel_distance_prompt(distance_budget_in_mm):
+    if distance_budget_in_mm > 0:
+        return f"- The total distance of the path must within {distance_budget_in_mm} in mm."
+    
+    return ""

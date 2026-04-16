@@ -15,7 +15,7 @@ if sys.platform == 'win32':
 def parse_arguments():
     """Parse command-line arguments for the master script."""
     parser = argparse.ArgumentParser(
-        description='Master Script - Run both Easy Semantic and Easy Spatial prompts concurrently',
+        description='Master Script - Run all prompt scripts (Easy Semantic, Easy Spatial, Medium, Hard) concurrently',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -193,7 +193,9 @@ async def run_all_scripts(args, logger):
     # Define scripts to run
     scripts = [
         ('prompts_easy_semantic.py', 'Semantic'),
-        ('prompts_easy_spatial.py', 'Spatial')
+        ('prompts_easy_spatial.py', 'Spatial'),
+        ('prompts_medium.py', 'Medium'),
+        ('prompts_hard.py', 'Hard')
     ]
     
     logger.info("="*70)
