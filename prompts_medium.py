@@ -17,8 +17,8 @@ from build_prompts import (build_required_categories, build_required_OR_attribut
 
 from prompts_utils import (load_image, exhibit_selection, prompt_gpt, 
                            parse_route_and_save, 
-                           discover_complexity_and_layouts, build_paths, 
-                           extract_scar_validations, extract_validation_fields)
+                           discover_complexity_and_layouts, discover_config_files, 
+                           build_paths, extract_scar_validations, extract_validation_fields)
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
 if sys.platform == 'win32':
@@ -112,8 +112,8 @@ Examples:
     parser.add_argument('--image-file', type=str, default='annotated_layout.png',
                        help='Image filename (default: annotated_layout.png)')
     
-    parser.add_argument('--config-file', type=str, default='medium.json',
-                       help='Config filename to load from each layout (default: medium.json)')
+    parser.add_argument('--config-file', type=str, default='medium_*.json',
+                       help='Config filename pattern to load from each layout (default: medium_*.json, use medium.json for single file)')
     
     parser.add_argument('--exhibits-file', type=str, default='exhibit_list.json',
                        help='Exhibits list filename (default: exhibit_list.json)')
@@ -225,11 +225,13 @@ def setup_layout_logger(log_file_path):
     return logger
 
 
-def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None):
-    """Process a single layout folder.
+def process_layout(layout_folder, config_variant, config_path, model_name, difficulty, complexity, pbar=None):
+    """Process a single layout folder with a specific config file.
     
     Args:
         layout_folder: Path to the layout folder
+        config_variant: Config variant name (e.g., "medium_01")
+        config_path: Path to the specific config file
         model_name: Name of the model to use
         difficulty: Difficulty level
         complexity: Complexity level
@@ -239,13 +241,16 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
     
     # Update progress bar if provided
     if pbar:
-        pbar.set_description(f"[Medium] {complexity}/{layout_name}")
+        pbar.set_description(f"[Medium] {complexity}/{layout_name} ({config_variant})")
     
-    # Build paths using the utility function
+    # Build paths using the utility function with config_variant
     input_paths, output_paths = build_paths(
         layout_folder, model_name, difficulty, complexity,
-        BASE_RESULTS_DIR, FILENAMES
+        BASE_RESULTS_DIR, FILENAMES, config_variant=config_variant
     )
+    
+    # Override the config path with the specific one
+    input_paths['config'] = config_path
     
     # Setup per-layout logger
     log_file = output_paths['dir'] / "processing.log"
@@ -596,21 +601,39 @@ def main():
     for complexity, layout_path in complexity_layouts:
         print(f"  - {complexity}/{layout_path.name}")
     
+    # Discover all config files for each layout
+    layout_config_combos = []
+    for complexity, layout_folder in complexity_layouts:
+        config_files = discover_config_files(layout_folder, CONFIG_FILENAME)
+        if not config_files:
+            print(f"⚠️  No config files found for {complexity}/{layout_folder.name} matching '{CONFIG_FILENAME}'")
+            continue
+        for config_variant, config_path in config_files:
+            layout_config_combos.append((complexity, layout_folder, config_variant, config_path))
+    
+    if not layout_config_combos:
+        print(f"\n✗ No config files found to process")
+        return
+    
+    print(f"\n✓ Found {len(layout_config_combos)} config(s) to process:")
+    for complexity, layout_folder, config_variant, _ in layout_config_combos:
+        print(f"  - {complexity}/{layout_folder.name}/{config_variant}")
+    
     print()  # Empty line before progress bar
     
-    # Process each layout with progress bar
+    # Process each layout+config combination with progress bar
     results = {}
     
     # Create progress bar (disable if --no-progress flag is set)
     disable_progress = args.no_progress
-    with tqdm(complexity_layouts, desc="[Medium] Processing layouts", 
-              unit="layout", disable=disable_progress, position=args.progress_position,
+    with tqdm(layout_config_combos, desc="[Medium] Processing configs", 
+              unit="config", disable=disable_progress, position=args.progress_position,
               bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]',
               file=sys.stderr, dynamic_ncols=True, leave=False, mininterval=0.5) as pbar:
         
-        for complexity, layout_folder in pbar:
-            key = f"{complexity}/{layout_folder.name}"
-            success = process_layout(layout_folder, MODEL, DIFFICULTY, complexity, pbar=pbar)
+        for complexity, layout_folder, config_variant, config_path in pbar:
+            key = f"{complexity}/{layout_folder.name}/{config_variant}"
+            success = process_layout(layout_folder, config_variant, config_path, MODEL, DIFFICULTY, complexity, pbar=pbar)
             results[key] = "Success" if success else "Failed"
     
     # Summary
@@ -627,6 +650,10 @@ def main():
         print(f"  {status_symbol} {key}: {status}")
     print("="*70)
     print("\nPipeline complete!")
+    
+    # Exit with appropriate code
+    failed_count = len(results) - successful
+    sys.exit(0 if failed_count == 0 else 1)
 
 
 if __name__ == "__main__":

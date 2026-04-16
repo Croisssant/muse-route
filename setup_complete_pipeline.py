@@ -165,7 +165,7 @@ class CompletePipelineRunner:
             print()
             print(f"📁 Layout Directory: {self.layout_dir}")
             print()
-            print("📄 All Generated Files (9 total):")
+            print("📄 All Generated Files (15 total):")
             print()
             print("   Annotation Files:")
             
@@ -194,16 +194,28 @@ class CompletePipelineRunner:
             print()
             print("   Config Files:")
             
-            config_files = [
-                'easy_spatial.json',
-                'easy_semantic.json',
-                'medium.json',
-                'hard.json'
-            ]
-            for file in config_files:
+            # Check static easy config files
+            easy_configs = ['easy_spatial.json', 'easy_semantic.json']
+            for file in easy_configs:
                 filepath = self.layout_dir / file
                 status = "✅" if filepath.exists() else "⚠️"
                 print(f"   {status} {file}")
+            
+            # Dynamically discover numbered medium and hard config files
+            medium_configs = sorted(glob(str(self.layout_dir / 'medium_*.json')))
+            hard_configs = sorted(glob(str(self.layout_dir / 'hard_*.json')))
+            
+            # Display discovered medium configs
+            for config_path in medium_configs:
+                config_file = Path(config_path)
+                status = "✅" if config_file.exists() else "⚠️"
+                print(f"   {status} {config_file.name}")
+            
+            # Display discovered hard configs
+            for config_path in hard_configs:
+                config_file = Path(config_path)
+                status = "✅" if config_file.exists() else "⚠️"
+                print(f"   {status} {config_file.name}")
             
             print()
             print("🎉 Layout is now ready for route validation!")
@@ -284,7 +296,7 @@ Required Input Files:
   • exhibit_input.txt
   • selected_exhibits_preprocessed.csv (global)
 
-Generated Files (9):
+Generated Files (15 total):
   Annotations:
     • layout_annotations.json
     • annotated_layout.png
@@ -297,8 +309,8 @@ Generated Files (9):
   Configs:
     • easy_spatial.json
     • easy_semantic.json
-    • medium.json
-    • hard.json
+    • medium_01.json, medium_02.json, medium_03.json, medium_04.json
+    • hard_01.json, hard_02.json, hard_03.json, hard_04.json
         """
     )
     

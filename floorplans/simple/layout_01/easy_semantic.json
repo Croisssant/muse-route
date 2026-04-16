@@ -16,12 +16,12 @@
       "in_range": []
     },
     "material_constraint": {
-      "materials": []
+      "materials": [
+        "agate"
+      ]
     },
     "find_spot_constraint": {
-      "locations": [
-        "Libya"
-      ]
+      "locations": []
     },
     "technique_constraint": {
       "techniques": []

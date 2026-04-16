@@ -6,49 +6,37 @@
   },
   "gallery_configs": {
     "gallery_room_1": "must_see",
-    "gallery_room_2": "must_see"
+    "gallery_open_space_1": "must_see"
   },
-  "distance_budget_in_mm": 2500000,
+  "distance_budget_in_mm": 1000000000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Mesopotamian",
-    "Japanese"
+    "Mesopotamian"
   ],
-  "at_least_n_exhibits_to_cover": 16,
-  "specific_exhibit_to_cover": [
-    54,
-    12,
-    16,
-    47,
-    31
-  ],
+  "at_least_n_exhibits_to_cover": 13,
+  "specific_exhibit_to_cover": [],
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": [
-        "525 BC",
-        "475 BC"
+        "618",
+        "906"
       ]
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "stoneware",
-        "stone"
+        "gold",
+        "earthenware"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Iraq",
-        "Japan",
-        "Italy"
+        "Italy",
+        "China"
       ]
     },
     "technique_constraint": {
-      "techniques": [
-        "painted; incised",
-        "carved"
-      ]
+      "techniques": []
     },
     "combined_constraint": {
       "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",
@@ -56,14 +44,10 @@
         "in_range": []
       },
       "material_constraint": {
-        "materials": [
-          "pottery"
-        ]
+        "materials": []
       },
       "find_spot_constraint": {
-        "locations": [
-          "Iraq"
-        ]
+        "locations": []
       },
       "technique_constraint": {
         "techniques": []

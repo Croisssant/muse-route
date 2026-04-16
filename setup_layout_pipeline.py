@@ -16,6 +16,7 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from glob import glob
 
 
 class PipelineRunner:
@@ -160,12 +161,22 @@ class PipelineRunner:
         success = self.run_step(3, "Generate Config Files", command)
         
         if success:
+            # Add static easy config files
             self.generated_files.extend([
                 self.layout_dir / 'easy_spatial.json',
-                self.layout_dir / 'easy_semantic.json',
-                self.layout_dir / 'medium.json',
-                self.layout_dir / 'hard.json'
+                self.layout_dir / 'easy_semantic.json'
             ])
+            
+            # Dynamically discover numbered medium and hard config files
+            medium_configs = sorted(glob(str(self.layout_dir / 'medium_*.json')))
+            hard_configs = sorted(glob(str(self.layout_dir / 'hard_*.json')))
+            
+            # Add discovered config files
+            for config_path in medium_configs:
+                self.generated_files.append(Path(config_path))
+            
+            for config_path in hard_configs:
+                self.generated_files.append(Path(config_path))
         
         return success
     
@@ -245,14 +256,17 @@ Pipeline Steps:
   2. Visualize exhibits by section on layout image
   3. Generate difficulty-specific config files
   
-Generated Files:
-  • exhibits.csv
-  • exhibit_list.json
-  • exhibit_visualization.png
-  • easy_spatial.json
-  • easy_semantic.json
-  • medium.json
-  • hard.json
+Generated Files (13 total):
+  Exhibit Files:
+    • exhibits.csv
+    • exhibit_list.json
+    • exhibit_visualization.png
+  
+  Config Files:
+    • easy_spatial.json
+    • easy_semantic.json
+    • medium_01.json, medium_02.json, medium_03.json, medium_04.json
+    • hard_01.json, hard_02.json, hard_03.json, hard_04.json
         """
     )
     

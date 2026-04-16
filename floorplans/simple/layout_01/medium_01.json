@@ -19,8 +19,8 @@
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": [
-        "664 BC",
-        "510 BC"
+        "525 BC",
+        "343 BC"
       ]
     },
     "material_constraint": {

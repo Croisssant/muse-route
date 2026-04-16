@@ -615,6 +615,10 @@ def main():
         print(f"  {status_symbol} {key}: {status}")
     print("="*70)
     print("\nPipeline complete!")
+    
+    # Exit with appropriate code
+    failed_count = len(results) - successful
+    sys.exit(0 if failed_count == 0 else 1)
 
 
 if __name__ == "__main__":

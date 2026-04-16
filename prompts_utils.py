@@ -245,8 +245,52 @@ def filter_and_validate_attributes(scar_full, configs):
     return all_valid
 
 
+def discover_config_files(layout_folder, config_pattern):
+    """
+    Discover config files matching a pattern in the layout folder.
+    
+    Args:
+        layout_folder: Path to the layout directory
+        config_pattern: Filename pattern (e.g., "medium_*.json", "hard.json")
+    
+    Returns:
+        List of tuples: [(config_variant, config_path), ...]
+        Example: [("medium_01", Path("medium_01.json")), ("medium_02", Path("medium_02.json"))]
+        
+        For single files (no wildcard), returns: [("medium", Path("medium.json"))]
+    """
+    import glob
+    
+    # Check if pattern contains wildcard
+    if '*' in config_pattern:
+        # Find all matching files
+        pattern_path = str(layout_folder / config_pattern)
+        matching_files = sorted(glob.glob(pattern_path))
+        
+        if not matching_files:
+            return []
+        
+        results = []
+        for filepath in matching_files:
+            config_path = Path(filepath)
+            # Extract variant name from filename (e.g., "medium_01.json" -> "medium_01")
+            config_variant = config_path.stem
+            results.append((config_variant, config_path))
+        
+        return sorted(results)
+    else:
+        # Single file (no wildcard)
+        config_path = layout_folder / config_pattern
+        if config_path.exists():
+            # Extract base name without extension (e.g., "medium.json" -> "medium")
+            config_variant = config_path.stem
+            return [(config_variant, config_path)]
+        else:
+            return []
+
+
 def build_paths(layout_folder, model_name, difficulty, complexity, 
-                base_results_dir, filenames):
+                base_results_dir, filenames, config_variant=None):
     """
     Build all input and output paths for a given layout.
     
@@ -257,6 +301,7 @@ def build_paths(layout_folder, model_name, difficulty, complexity,
         complexity: Complexity level (e.g., "simple")
         base_results_dir: Base results directory Path
         filenames: Dict with filename mappings (e.g., {'image': 'annotated_layout.png', ...})
+        config_variant: Optional config variant name (e.g., "medium_01"). If None, uses difficulty.
     
     Returns:
         Tuple of (input_paths, output_paths) where both are dictionaries
@@ -269,9 +314,13 @@ def build_paths(layout_folder, model_name, difficulty, complexity,
         for key, filename in filenames.items()
     }
     
+    # Determine output folder prefix
+    # If config_variant is provided, use it; otherwise use difficulty
+    folder_prefix = config_variant if config_variant else difficulty
+    
     # Output directory: base_results_dir already includes model folder, so just add difficulty/complexity/layout
     output_dir = (base_results_dir / difficulty / 
-                  complexity / f"{difficulty}_{layout_name}")
+                  complexity / f"{folder_prefix}_{layout_name}")
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Output paths

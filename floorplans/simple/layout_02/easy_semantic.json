@@ -14,20 +14,20 @@
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": [
-        "525 BC",
-        "475 BC"
+        "250",
+        "600"
       ]
     },
     "material_constraint": {
       "materials": []
     },
     "find_spot_constraint": {
-      "locations": [
-        "Cyprus"
-      ]
+      "locations": []
     },
     "technique_constraint": {
-      "techniques": []
+      "techniques": [
+        "ash-glazed; tataki"
+      ]
     },
     "combined_constraint": {
       "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",

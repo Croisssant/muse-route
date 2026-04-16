@@ -4,7 +4,10 @@
     "restricted": "Route cannot enter",
     "normal": "No restrictions"
   },
-  "gallery_configs": {},
+  "gallery_configs": {
+    "gallery_01": "must_see",
+    "gallery_02": "must_see"
+  },
   "distance_budget_in_mm": 1000000000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [],
@@ -16,9 +19,7 @@
       "in_range": []
     },
     "material_constraint": {
-      "materials": [
-        "metal"
-      ]
+      "materials": []
     },
     "find_spot_constraint": {
       "locations": []

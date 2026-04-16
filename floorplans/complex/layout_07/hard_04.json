@@ -6,48 +6,48 @@
   },
   "gallery_configs": {
     "gallery_room_1": "must_see",
-    "gallery_open_space_1": "must_see"
+    "gallery_room_2": "must_see"
   },
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Greek",
-    "Ancient Egyptian"
+    "Mesopotamian",
+    "Japanese"
   ],
-  "at_least_n_exhibits_to_cover": 25,
+  "at_least_n_exhibits_to_cover": 19,
   "specific_exhibit_to_cover": [
-    82,
-    32,
-    23,
-    4,
+    17,
+    40,
+    11,
+    36,
     19
   ],
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": [
-        "618",
-        "906"
+        "525 BC",
+        "475 BC"
       ]
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "glazed composition",
-        "stoneware"
+        "steatite",
+        "bronze",
+        "chalcedony"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
+        "Iraq",
         "Japan",
-        "Iraq"
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted; incised",
-        "glazed"
+        "ash-glazed",
+        "incised"
       ]
     },
     "combined_constraint": {
@@ -57,7 +57,7 @@
       },
       "material_constraint": {
         "materials": [
-          "pottery"
+          "gold"
         ]
       },
       "find_spot_constraint": {

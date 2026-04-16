@@ -100,7 +100,8 @@ def collect_all_results(results_dir='results'):
     # Find all final_results.json files
     for json_file in results_path.rglob('final_results.json'):
         # Parse the directory structure
-        # Expected: results/{model}/{difficulty}/{complexity}/{layout}/final_results.json
+        # Expected: results/{model}/{difficulty}/{complexity}/{config_variant}_{layout}/final_results.json
+        # Example: results/gpt-5.4(high)/medium/complex/medium_01_layout_03/final_results.json
         parts = json_file.parts
         
         try:
@@ -111,7 +112,19 @@ def collect_all_results(results_dir='results'):
                 model = parts[results_idx + 1]
                 difficulty = parts[results_idx + 2]
                 complexity = parts[results_idx + 3]
-                layout = parts[results_idx + 4]
+                folder_name = parts[results_idx + 4]  # e.g., "medium_01_layout_03" or "easy_spatial_layout_03"
+                
+                # Parse folder name to extract config_variant and layout
+                # Format: {config_variant}_{layout_name}
+                # Split on last occurrence of layout pattern
+                if '_layout_' in folder_name:
+                    parts_split = folder_name.rsplit('_layout_', 1)
+                    config_variant = parts_split[0]
+                    layout = 'layout_' + parts_split[1]
+                else:
+                    # Fallback: use entire folder name as layout (backward compatibility)
+                    config_variant = difficulty
+                    layout = folder_name
                 
                 # Load the JSON data
                 with open(json_file, 'r') as f:
@@ -126,6 +139,7 @@ def collect_all_results(results_dir='results'):
                     'model': model,
                     'difficulty': difficulty,
                     'complexity': complexity,
+                    'config_variant': config_variant,
                     'layout': layout,
                     'svr': f"{svr_pass}/{svr_total}",
                     'scsr': f"{scsr_pass}/{scsr_total}",
@@ -141,7 +155,7 @@ def collect_all_results(results_dir='results'):
 def build_summary_dataframe(results):
     """
     Build a hierarchical DataFrame from the collected results.
-    Multi-index rows: [Complexity, Difficulty, Layout]
+    Multi-index rows: [Complexity, Difficulty, Config Variant, Layout]
     Multi-level columns: [Model, Metric]
     """
     if not results:
@@ -164,17 +178,17 @@ def build_summary_dataframe(results):
     df['complexity_sort'] = df['complexity'].map(complexity_order)
     df['difficulty_sort'] = df['difficulty'].map(difficulty_order)
     
-    # Sort by complexity, difficulty, then layout
-    df = df.sort_values(['complexity_sort', 'difficulty_sort', 'layout'])
+    # Sort by complexity, difficulty, config_variant, then layout
+    df = df.sort_values(['complexity_sort', 'difficulty_sort', 'config_variant', 'layout'])
     df = df.drop(['complexity_sort', 'difficulty_sort'], axis=1)
     
     # Format names for display
     df['complexity_display'] = df['complexity'].str.capitalize()
     df['difficulty_display'] = df['difficulty'].str.replace('_', ' ').str.title()
     
-    # Create pivot table with multi-index
+    # Create pivot table with multi-index including config_variant
     pivot_df = df.pivot_table(
-        index=['complexity_display', 'difficulty_display', 'layout'],
+        index=['complexity_display', 'difficulty_display', 'config_variant', 'layout'],
         columns='model',
         values=['svr', 'scsr', 'scar'],
         aggfunc='first'
@@ -186,7 +200,7 @@ def build_summary_dataframe(results):
         pivot_df = pivot_df.sort_index(axis=1, level=0)
     
     # Rename index labels
-    pivot_df.index.names = ['Layout Complexity', 'Difficulty', 'Layout']
+    pivot_df.index.names = ['Layout Complexity', 'Difficulty', 'Config Variant', 'Layout']
     
     return pivot_df
 
@@ -211,21 +225,21 @@ def export_to_latex(df, output_file='metrics_summary.tex'):
     models = df.columns.levels[0] if hasattr(df.columns, 'levels') else df.columns.get_level_values(0).unique()
     num_models = len(models)
     
-    # Define column alignment
-    col_align = "l l l " + " ".join(["c c c"] * num_models)
+    # Define column alignment (4 index columns now: complexity, difficulty, config_variant, layout)
+    col_align = "l l l l " + " ".join(["c c c"] * num_models)
     latex_lines.append(f"\\begin{{tabular}}{{{col_align}}}")
     latex_lines.append("\\hline")
     
     # Create header rows
     # First row: Model names spanning 3 columns each
-    header1 = "\\textbf{Complexity} & \\textbf{Difficulty} & \\textbf{Layout}"
+    header1 = "\\textbf{Complexity} & \\textbf{Difficulty} & \\textbf{Config} & \\textbf{Layout}"
     for model in models:
         header1 += f" & \\multicolumn{{3}}{{c}}{{\\textbf{{{model}}}}}"
     header1 += " \\\\"
     latex_lines.append(header1)
     
     # Second row: Metric names (SVR, SCSR, SCAR) for each model
-    header2 = " & & "
+    header2 = " & & & "
     for _ in models:
         header2 += " & \\textbf{SVR} & \\textbf{SCSR} & \\textbf{SCAR}"
     header2 += " \\\\"
@@ -235,9 +249,10 @@ def export_to_latex(df, output_file='metrics_summary.tex'):
     # Add data rows
     prev_complexity = None
     prev_difficulty = None
+    prev_config_variant = None
     
     for idx, row in df.iterrows():
-        complexity, difficulty, layout = idx
+        complexity, difficulty, config_variant, layout = idx
         
         # Add separator between complexity groups
         if prev_complexity is not None and prev_complexity != complexity:
@@ -260,6 +275,13 @@ def export_to_latex(df, output_file='metrics_summary.tex'):
             row_str += ""
         row_str += " & "
         
+        # Config variant column (only show if changed)
+        if config_variant != prev_config_variant:
+            row_str += f"{config_variant}"
+        else:
+            row_str += ""
+        row_str += " & "
+        
         # Layout column
         row_str += f"{layout}"
         
@@ -278,6 +300,7 @@ def export_to_latex(df, output_file='metrics_summary.tex'):
         
         prev_complexity = complexity
         prev_difficulty = difficulty
+        prev_config_variant = config_variant
     
     # End table
     latex_lines.append("\\hline")
@@ -316,6 +339,7 @@ def export_to_image(df, output_file='metrics_summary.png', dpi=300):
     display_data = []
     prev_complexity = None
     prev_difficulty = None
+    prev_config_variant = None
     
     for idx, row in display_df.iterrows():
         row_data = list(row)
@@ -331,6 +355,12 @@ def export_to_image(df, output_file='metrics_summary.png', dpi=300):
             row_data[1] = ''
         else:
             prev_difficulty = row_data[1]
+        
+        # Replace repeated config_variant values with empty string
+        if row_data[2] == prev_config_variant:
+            row_data[2] = ''
+        else:
+            prev_config_variant = row_data[2]
         
         display_data.append(row_data)
     
@@ -365,19 +395,23 @@ def export_to_image(df, output_file='metrics_summary.png', dpi=300):
         cell.set_facecolor('#4472C4')
         cell.set_text_props(weight='bold', color='white')
     
-    # Style index columns (first 3 columns) and add visual separation
+    # Style index columns (first 4 columns: complexity, difficulty, config_variant, layout) and add visual separation
     for i in range(1, len(display_data) + 1):
-        for j in range(3):
+        for j in range(4):
             cell = table[(i, j)]
             cell.set_facecolor('#E7E6E6')
             
-            # Remove borders from merged cells (empty cells in complexity and difficulty columns)
+            # Remove borders from merged cells (empty cells)
             if j == 0 and display_data[i-1][0] == '':
                 # Empty complexity cell - remove borders
                 cell.set_edgecolor('#E7E6E6')  # Match background color
                 cell.set_linewidth(0.5)
             elif j == 1 and display_data[i-1][1] == '':
                 # Empty difficulty cell - remove borders
+                cell.set_edgecolor('#E7E6E6')  # Match background color
+                cell.set_linewidth(0.5)
+            elif j == 2 and display_data[i-1][2] == '':
+                # Empty config_variant cell - remove borders
                 cell.set_edgecolor('#E7E6E6')  # Match background color
                 cell.set_linewidth(0.5)
             else:

@@ -268,90 +268,194 @@ class ConfigGenerator:
         
         return config
     
-    def generate_medium(self):
-        """Generate medium config with mixed spatial and semantic constraints."""
+    def generate_medium(self, variation_index=0):
+        """Generate medium config with mixed spatial and semantic constraints.
+        
+        Args:
+            variation_index: 0-3, creates different combinations of constraints
+        """
         config = self._base_config()
         
         # Set all galleries to must_see
         for gallery in self.gallery_names:
             config["gallery_configs"][gallery] = "must_see"
         
-        # Moderate exhibit coverage
+        # Moderate exhibit coverage - vary slightly
         total = self.analyzer.stats['total_exhibits']
-        config["at_least_n_exhibits_to_cover"] = min(10, max(5, total // 10))
+        base_coverage = min(10, max(5, total // 10))
+        config["at_least_n_exhibits_to_cover"] = base_coverage + variation_index
         
-        # Add one common category
-        sections = self.analyzer.get_most_common('sections', n=1)
+        # Add sections - vary which sections are chosen
+        sections = self.analyzer.get_most_common('sections', n=4)
         if sections:
-            config["exhibit_categories_to_cover"] = sections
+            # Different variations pick different sections
+            if variation_index == 0:
+                config["exhibit_categories_to_cover"] = sections[:1]
+            elif variation_index == 1:
+                config["exhibit_categories_to_cover"] = sections[1:2] if len(sections) > 1 else sections[:1]
+            elif variation_index == 2:
+                config["exhibit_categories_to_cover"] = sections[2:3] if len(sections) > 2 else sections[:1]
+            else:
+                config["exhibit_categories_to_cover"] = sections[3:4] if len(sections) > 3 else sections[:1]
         
-        # Add 2-3 OR constraints with most common values
-        materials = self.analyzer.get_most_common('materials', n=2)
-        if materials:
-            config["exhibit_attribute_constraints"]["material_constraint"]["materials"] = materials
+        # Add materials - vary selection
+        all_materials = self.analyzer.get_most_common('materials', n=6)
+        if all_materials:
+            if variation_index == 0:
+                materials = all_materials[:2]
+            elif variation_index == 1:
+                materials = all_materials[1:3] if len(all_materials) > 2 else all_materials[:2]
+            elif variation_index == 2:
+                materials = all_materials[2:4] if len(all_materials) > 3 else all_materials[:2]
+            else:
+                materials = all_materials[3:5] if len(all_materials) > 4 else all_materials[:2]
+            
+            if materials:
+                config["exhibit_attribute_constraints"]["material_constraint"]["materials"] = materials
         
-        countries = self.analyzer.get_most_common('find_spot_countries', n=2)
-        if countries:
-            config["exhibit_attribute_constraints"]["find_spot_constraint"]["locations"] = countries
+        # Add countries - vary selection
+        all_countries = self.analyzer.get_most_common('find_spot_countries', n=6)
+        if all_countries:
+            if variation_index == 0:
+                countries = all_countries[:2]
+            elif variation_index == 1:
+                countries = all_countries[1:3] if len(all_countries) > 2 else all_countries[:2]
+            elif variation_index == 2:
+                countries = all_countries[2:4] if len(all_countries) > 3 else all_countries[:2]
+            else:
+                countries = all_countries[3:5] if len(all_countries) > 4 else all_countries[:2]
+            
+            if countries:
+                config["exhibit_attribute_constraints"]["find_spot_constraint"]["locations"] = countries
         
-        # Add date range if available
+        # Add date range if available - use seed for reproducibility
+        random.seed(variation_index * 100)
         date_range = self.analyzer.get_random_date_range(prefer_common=True)
         if date_range:
             config["exhibit_attribute_constraints"]["date_constraint"]["in_range"] = date_range
+        random.seed()  # Reset seed
         
         return config
     
-    def generate_hard(self):
-        """Generate hard config with all constraint types."""
+    def generate_hard(self, variation_index=0):
+        """Generate hard config with all constraint types.
+        
+        Args:
+            variation_index: 0-3, creates different combinations of constraints
+        """
         config = self._base_config()
         
         # Set all galleries to must_see
         for gallery in self.gallery_names:
             config["gallery_configs"][gallery] = "must_see"
         
-        # High exhibit coverage
+        # High exhibit coverage - vary slightly
         total = self.analyzer.stats['total_exhibits']
-        config["at_least_n_exhibits_to_cover"] = min(25, max(15, int(total * 0.25)))
+        base_coverage = min(25, max(15, int(total * 0.25)))
+        config["at_least_n_exhibits_to_cover"] = base_coverage + variation_index
 
         # Set distance budget for hard difficulty (2.5km = 2,500,000mm)
         config["distance_budget_in_mm"] = 2500000
         
-        # Add multiple common categories
-        sections = self.analyzer.get_most_common('sections', n=3)
-        if sections:
-            config["exhibit_categories_to_cover"] = sections[:2]  # Limit to 2
+        # Add multiple common categories - vary selection
+        all_sections = self.analyzer.get_most_common('sections', n=6)
+        if all_sections:
+            if variation_index == 0:
+                sections = all_sections[:2]
+            elif variation_index == 1:
+                sections = all_sections[1:3] if len(all_sections) > 2 else all_sections[:2]
+            elif variation_index == 2:
+                sections = all_sections[2:4] if len(all_sections) > 3 else all_sections[:2]
+            else:
+                sections = all_sections[3:5] if len(all_sections) > 4 else all_sections[:2]
+            
+            if sections:
+                config["exhibit_categories_to_cover"] = sections
         
-        # Add specific exhibits (random 5-10)
+        # Add specific exhibits - use seed for reproducible randomness
+        random.seed(variation_index * 1000)
         exhibit_numbers = list(range(1, total + 1))
         num_specific = min(10, max(5, total // 20))
         specific_exhibits = random.sample(exhibit_numbers, num_specific)
         config["specific_exhibit_to_cover"] = specific_exhibits
+        random.seed()  # Reset seed
         
-        # Fill ALL OR constraints with most common values
-        materials = self.analyzer.get_most_common('materials', n=3)
-        if materials:
-            config["exhibit_attribute_constraints"]["material_constraint"]["materials"] = materials
+        # Fill ALL OR constraints with most common values - vary selection
+        all_materials = self.analyzer.get_most_common('materials', n=9)
+        if all_materials:
+            if variation_index == 0:
+                materials = all_materials[:3]
+            elif variation_index == 1:
+                materials = all_materials[2:5] if len(all_materials) > 4 else all_materials[:3]
+            elif variation_index == 2:
+                materials = all_materials[4:7] if len(all_materials) > 6 else all_materials[:3]
+            else:
+                materials = all_materials[6:9] if len(all_materials) > 8 else all_materials[:3]
+            
+            if materials:
+                config["exhibit_attribute_constraints"]["material_constraint"]["materials"] = materials
         
-        techniques = self.analyzer.get_most_common('techniques', n=2)
-        if techniques:
-            config["exhibit_attribute_constraints"]["technique_constraint"]["techniques"] = techniques
+        all_techniques = self.analyzer.get_most_common('techniques', n=6)
+        if all_techniques:
+            if variation_index == 0:
+                techniques = all_techniques[:2]
+            elif variation_index == 1:
+                techniques = all_techniques[1:3] if len(all_techniques) > 2 else all_techniques[:2]
+            elif variation_index == 2:
+                techniques = all_techniques[2:4] if len(all_techniques) > 3 else all_techniques[:2]
+            else:
+                techniques = all_techniques[3:5] if len(all_techniques) > 4 else all_techniques[:2]
+            
+            if techniques:
+                config["exhibit_attribute_constraints"]["technique_constraint"]["techniques"] = techniques
         
-        countries = self.analyzer.get_most_common('find_spot_countries', n=3)
-        if countries:
-            config["exhibit_attribute_constraints"]["find_spot_constraint"]["locations"] = countries
+        all_countries = self.analyzer.get_most_common('find_spot_countries', n=9)
+        if all_countries:
+            if variation_index == 0:
+                countries = all_countries[:3]
+            elif variation_index == 1:
+                countries = all_countries[2:5] if len(all_countries) > 4 else all_countries[:3]
+            elif variation_index == 2:
+                countries = all_countries[4:7] if len(all_countries) > 6 else all_countries[:3]
+            else:
+                countries = all_countries[6:9] if len(all_countries) > 8 else all_countries[:3]
+            
+            if countries:
+                config["exhibit_attribute_constraints"]["find_spot_constraint"]["locations"] = countries
         
+        # Add date range - use seed for reproducibility
+        random.seed(variation_index * 500)
         date_range = self.analyzer.get_random_date_range(prefer_common=True)
         if date_range:
             config["exhibit_attribute_constraints"]["date_constraint"]["in_range"] = date_range
+        random.seed()  # Reset seed
         
-        # Add combined AND constraint
-        combined_materials = self.analyzer.get_most_common('materials', n=1)
-        if combined_materials:
-            config["exhibit_attribute_constraints"]["combined_constraint"]["material_constraint"]["materials"] = combined_materials
+        # Add combined AND constraint - vary which attributes are combined
+        if all_materials:
+            if variation_index == 0:
+                combined_materials = all_materials[:1]
+            elif variation_index == 1:
+                combined_materials = all_materials[1:2] if len(all_materials) > 1 else all_materials[:1]
+            elif variation_index == 2:
+                combined_materials = all_materials[2:3] if len(all_materials) > 2 else all_materials[:1]
+            else:
+                combined_materials = all_materials[3:4] if len(all_materials) > 3 else all_materials[:1]
+            
+            if combined_materials:
+                config["exhibit_attribute_constraints"]["combined_constraint"]["material_constraint"]["materials"] = combined_materials
         
-        combined_countries = self.analyzer.get_most_common('find_spot_countries', n=1)
-        if combined_countries:
-            config["exhibit_attribute_constraints"]["combined_constraint"]["find_spot_constraint"]["locations"] = combined_countries
+        if all_countries:
+            if variation_index == 0:
+                combined_countries = all_countries[:1]
+            elif variation_index == 1:
+                combined_countries = all_countries[1:2] if len(all_countries) > 1 else all_countries[:1]
+            elif variation_index == 2:
+                combined_countries = all_countries[2:3] if len(all_countries) > 2 else all_countries[:1]
+            else:
+                combined_countries = all_countries[3:4] if len(all_countries) > 3 else all_countries[:1]
+            
+            if combined_countries:
+                config["exhibit_attribute_constraints"]["combined_constraint"]["find_spot_constraint"]["locations"] = combined_countries
         
         return config
 
@@ -456,15 +560,19 @@ Examples:
     easy_semantic = generator.generate_easy_semantic()
     save_config(easy_semantic, layout_path / 'easy_semantic.json')
     
-    # Medium
-    print("\n3️⃣  Medium")
-    medium = generator.generate_medium()
-    save_config(medium, layout_path / 'medium.json')
+    # Medium - Generate 4 variations
+    print("\n3️⃣  Medium (4 variations)")
+    for i in range(4):
+        print(f"   Variation {i+1}/4")
+        medium = generator.generate_medium(variation_index=i)
+        save_config(medium, layout_path / f'medium_{i+1:02d}.json')
     
-    # Hard
-    print("\n4️⃣  Hard")
-    hard = generator.generate_hard()
-    save_config(hard, layout_path / 'hard.json')
+    # Hard - Generate 4 variations
+    print("\n4️⃣  Hard (4 variations)")
+    for i in range(4):
+        print(f"   Variation {i+1}/4")
+        hard = generator.generate_hard(variation_index=i)
+        save_config(hard, layout_path / f'hard_{i+1:02d}.json')
     
     print("\n" + "=" * 60)
     print("✨ Config Generation Complete!")
@@ -472,8 +580,8 @@ Examples:
     print(f"📁 Output directory: {layout_path}")
     print("   • easy_spatial.json")
     print("   • easy_semantic.json")
-    print("   • medium.json")
-    print("   • hard.json")
+    print("   • medium_01.json, medium_02.json, medium_03.json, medium_04.json")
+    print("   • hard_01.json, hard_02.json, hard_03.json, hard_04.json")
 
 
 if __name__ == '__main__':
