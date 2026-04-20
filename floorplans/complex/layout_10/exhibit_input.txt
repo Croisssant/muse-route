@@ -1,0 +1,7 @@
+1-26: Greek
+85: Greek
+27-49: Mesopotamian
+56: Mesopotamian
+50-55: Ancient Egyptian
+57-84: Tang dynasty
+86: Ancient Egyptian
