@@ -7,16 +7,16 @@ import io
 import argparse
 import logging
 from dotenv import load_dotenv
-from openai import OpenAI
 from tqdm import tqdm
 
 from pathlib import Path
 
 from build_prompts import build_required_categories, build_required_OR_attributes, build_required_AND_attributes, build_visit_distance
-from prompts_utils import (load_image, exhibit_selection, prompt_gpt, 
+from prompts_utils import (load_image, exhibit_selection, prompt_model, 
                            parse_route_and_save, 
                            discover_complexity_and_layouts, build_paths, 
-                           extract_scar_validations, extract_validation_fields)
+                           extract_scar_validations, extract_validation_fields,
+                           build_backend)
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
 if sys.platform == 'win32':
@@ -25,7 +25,6 @@ if sys.platform == 'win32':
 
 # -------- Load API key --------
 load_dotenv(override=True)
-client = OpenAI()
 
 
 def parse_arguments():
@@ -34,28 +33,41 @@ def parse_arguments():
         description='Museum Route Planning - Batch Processor with configurable parameters',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Run with all defaults
-  python prompts_easy_semantic.py
+        Examples:
 
-  # Override model and difficulty
-  python prompts_easy_semantic.py --model gpt-4 --difficulty easy_semantic
+        # Run with OpenAI (default)
+        python prompts_easy_semantic.py --backend openai --model gpt-5.4
+        
+        # Run with a local HuggingFace model
+        python prompts_easy_semantic.py --backend huggingface --model google/gemma-4-31B-it
 
-  # Process specific complexity
-  python prompts_easy_semantic.py --complexity-mode single --complexity complex
+        # Run with all defaults
+        python prompts_easy_semantic.py
 
-  # Process multiple complexities
-  python prompts_easy_semantic.py --complexity-mode list --complexity simple complex
+        # Override model and difficulty
+        python prompts_easy_semantic.py --model gpt-4 --difficulty easy_semantic
 
-  # Process specific layouts
-  python prompts_easy_semantic.py --layout-mode list --layouts layout_01 layout_02
+        # Process specific complexity
+        python prompts_easy_semantic.py --complexity-mode single --complexity complex
 
-  # Customize validation fields
-  python prompts_easy_semantic.py --svr-fields connectivity wall_crossings
+        # Process multiple complexities
+        python prompts_easy_semantic.py --complexity-mode list --complexity simple complex
+
+        # Process specific layouts
+        python prompts_easy_semantic.py --layout-mode list --layouts layout_01 layout_02
+
+        # Customize validation fields
+        python prompts_easy_semantic.py --svr-fields connectivity wall_crossings
         """
     )
     
     # Validation fields
+
+    parser.add_argument('--backend', type=str, default='openai',
+                    choices=['openai', 'huggingface'],
+                    help='Model backend to use (default: openai)')
+
+
     parser.add_argument('--svr-fields', nargs='+', 
                        default=['connectivity', 'wall_crossings', 'exhibit_collision', 'out_of_area_violations'],
                        help='SVR validation fields to include in final_results.json (default: connectivity wall_crossings exhibit_collision out_of_area_violations)')
@@ -193,6 +205,8 @@ FILENAMES = {
     'exhibits_csv': EXHIBITS_CSV_FILENAME,
     'annotations': ANNOTATIONS_FILENAME
 }
+
+BACKEND = build_backend(args.backend, args.model, args.reasoning)
 
 # ========================================
 
@@ -347,7 +361,7 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             f.write("="*70 + "\n\n")
             f.write(user_prompt_selection)
 
-        text_output_selection = prompt_gpt(client, model_name, system_prompt_selection, user_prompt_selection, image_base64, REASONING)
+        text_output_selection = prompt_model(BACKEND, system_prompt_selection, user_prompt_selection, image_base64)
         gpt_selected_exhibits = exhibit_selection(text_output_selection, exhibits_list)
         # print(f"Selected exhibits: {gpt_selected_exhibits}")
         
@@ -461,7 +475,7 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             f.write("="*70 + "\n\n")
             f.write(user_prompt_route)
 
-        text_output_route = prompt_gpt(client, model_name, system_prompt_route, user_prompt_route, image_base64, REASONING)
+        text_output_route = prompt_model(BACKEND, system_prompt_route, user_prompt_route, image_base64)
         
         parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
         logger.info(f"Route saved to: {output_paths['route_image']}")
@@ -556,6 +570,7 @@ def main():
     print("MUSEUM ROUTE PLANNING - BATCH PROCESSOR")
     print("="*70)
     print(f"\nConfiguration:")
+    print(f"  Backend:    {args.backend}")
     print(f"  Model: {MODEL}")
     print(f"  Difficulty: {DIFFICULTY}")
     print(f"  Complexity Mode: {COMPLEXITY_MODE}")

@@ -1,9 +1,13 @@
+import io
 import base64
 import json
 import re
-from pathlib import Path
 
+from abc import ABC, abstractmethod
+from pathlib import Path
 from PIL import Image, ImageDraw
+
+MAX_NEW_TOKENS = 1024
 
 def select_fields(source_dict, fields):
     return {
@@ -24,36 +28,186 @@ def load_image(input_image_path):
     return image_base64, img_width, img_height
 
 
-
-def prompt_gpt(client, model, system_prompt, user_prompt, image_base64, reasoning_effort=None): 
-    if reasoning_effort:
-        response = client.responses.create(
-            model=model,
-            reasoning={"effort": reasoning_effort},
+# ===========================================================================
+# Backend abstraction
+# ===========================================================================
+ 
+class ModelBackend(ABC):
+    """Common interface for all model backends."""
+ 
+    @abstractmethod
+    def prompt(self, system_prompt: str, user_prompt: str, image_base64: str) -> str:
+        """Send a multimodal prompt and return the text response."""
+        pass
+ 
+ 
+class OpenAIBackend(ModelBackend):
+    """Backend for OpenAI models (including reasoning models)."""
+ 
+    def __init__(self, client, model: str, reasoning_effort: str | None = None):
+        self.client = client
+        self.model = model
+        self.reasoning_effort = reasoning_effort
+ 
+    def prompt(self, system_prompt: str, user_prompt: str, image_base64: str) -> str:
+        kwargs = dict(
+            model=self.model,
             input=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": [
                     {"type": "input_text", "text": user_prompt},
-                    {"type": "input_image", "image_url": f"data:image/png;base64,{image_base64}"}
+                    {"type": "input_image",
+                     "image_url": f"data:image/png;base64,{image_base64}"}
                 ]}
             ]
         )
-
+        if self.reasoning_effort:
+            kwargs["reasoning"] = {"effort": self.reasoning_effort}
+ 
+        response = self.client.responses.create(**kwargs)
         return response.output_text.strip()
+ 
+ 
+class HuggingFaceBackend(ModelBackend):
+    """Backend for local HuggingFace models via transformers pipeline."""
+ 
+    def __init__(self, model_name: str, **pipeline_kwargs):
+        from transformers import pipeline
+        self.model_name = model_name
+        self.pipe = pipeline(
+            "image-text-to-text",
+            model=model_name,
+            **pipeline_kwargs
+        )
+ 
+    def _base64_to_pil(self, image_base64: str) -> Image.Image:
+        image_data = base64.b64decode(image_base64)
+        return Image.open(io.BytesIO(image_data)).convert("RGB")
+ 
+    def prompt(self, system_prompt: str, user_prompt: str, image_base64: str) -> str:
+        image = self._base64_to_pil(image_base64)
+        
+        # Strategy 1: Try separate system message (better for instruction-tuned models)
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},  # PIL Image, not base64
+                    {"type": "text", "text": user_prompt},
+                ]
+            })
+            
+            result = self.pipe(text=messages, max_new_tokens=MAX_NEW_TOKENS)
+            
+            # Parse response
+            last = result[0]["generated_text"][-1]
+            if isinstance(last, dict):
+                response = (last.get("content") or last.get("generated_text", "")).strip()
+                if response:  # Only return if we got actual content
+                    return response
+        
+        except (TypeError, KeyError, IndexError, AttributeError):
+            # Fall through to Strategy 2
+            pass
+        
+        # Strategy 2: Fallback - combine system and user prompts in chat format
+        try:
+            combined_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": combined_prompt},
+                ]
+            }]
+            
+            result = self.pipe(text=messages, max_new_tokens=MAX_NEW_TOKENS)
+            last = result[0]["generated_text"][-1]
+            if isinstance(last, dict):
+                response = (last.get("content") or last.get("generated_text", "")).strip()
+                if response:
+                    return response
+            return str(last).strip()
+        
+        except (TypeError, KeyError, IndexError, AttributeError):
+            # Fall through to Strategy 3
+            pass
+        
+        # Strategy 3: Simple positional API (for basic vision-language models)
+        try:
+            combined_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            print("[TEST] pipeline 3")
+            result = self.pipe(image, text=combined_prompt, max_new_tokens=MAX_NEW_TOKENS)
+            
+            # Handle various output formats
+            if isinstance(result, list) and len(result) > 0:
+                output = result[0]
+                if isinstance(output, dict):
+                    # Try common keys
+                    for key in ["generated_text", "text", "content"]:
+                        if key in output:
+                            response = str(output[key]).strip()
+                            if response:
+                                return response
+                return str(output).strip()
+            return str(result).strip()
+        
+        except Exception as e:
+            # All strategies failed - provide helpful error message
+            raise RuntimeError(
+                f"All HuggingFace pipeline strategies failed for model {self.model_name}. "
+                f"Last error: {type(e).__name__}: {str(e)}. "
+                f"Try checking the model's documentation for the correct API usage."
+            )
+ 
+ 
+# ===========================================================================
+# Unified prompt entry-point
+# ===========================================================================
+
+def build_backend(backend_type: str, model: str, reasoning_effort: str | None = None, **pipeline_kwargs):
+    """
+    Factory function to instantiate the correct ModelBackend.
+    
+    Args:
+        backend_type: Either "openai" or "huggingface"
+        model: Model name/identifier
+        reasoning_effort: Optional reasoning effort for OpenAI models
+        **pipeline_kwargs: Additional keyword arguments for HuggingFace pipeline
+    
+    Returns:
+        ModelBackend instance (OpenAIBackend or HuggingFaceBackend)
+    
+    Example:
+        # OpenAI
+        backend = build_backend("openai", "gpt-4-vision", reasoning_effort="medium")
+        
+        # HuggingFace
+        backend = build_backend("huggingface", "google/gemma-4-31B-it")
+    """
+    if backend_type == "openai":
+        from openai import OpenAI
+        client = OpenAI()
+        return OpenAIBackend(client, model, reasoning_effort)
+    
+    elif backend_type == "huggingface":
+        return HuggingFaceBackend(model, **pipeline_kwargs)
     
     else:
-        response = client.responses.create(
-            model=model,
-            input=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "input_text", "text": user_prompt},
-                    {"type": "input_image", "image_url": f"data:image/png;base64,{image_base64}"}
-                ]}
-            ]
-        )
+        raise ValueError(f"Unknown backend type: {backend_type!r}. Must be 'openai' or 'huggingface'")
+ 
+def prompt_model(backend: ModelBackend,
+                 system_prompt: str,
+                 user_prompt: str,
+                 image_base64: str) -> str:
+    """Single entry-point for all backends. Replaces prompt_gpt()."""
+    return backend.prompt(system_prompt, user_prompt, image_base64)
 
-        return response.output_text.strip()
 
 def exhibit_selection(text_output_selection, exhibits_list):
     
@@ -74,6 +228,8 @@ def exhibit_selection(text_output_selection, exhibits_list):
 
 
 def parse_route_and_save(input_image_path, output_image_path, text_output_route):
+
+    print(f"text_output_route: \n{text_output_route}")
      
     text_output_route = re.sub(r"^```json\s*|\s*```$", "", text_output_route, flags=re.MULTILINE)
 
@@ -84,7 +240,8 @@ def parse_route_and_save(input_image_path, output_image_path, text_output_route)
     try:
         route = json.loads(text_output_route)
     except json.JSONDecodeError:
-        match = re.search(r"\[\s*\[.*?\]\s*\]", text_output_route, re.DOTALL)
+        # More robust regex: find outermost array brackets with any content between
+        match = re.search(r"\[[\s\S]*\]", text_output_route)
         if match:
             route = json.loads(match.group())
         else:
@@ -322,13 +479,15 @@ def build_paths(layout_folder, model_name, difficulty, complexity,
     output_dir = (base_results_dir / difficulty / 
                   complexity / f"{folder_prefix}_{layout_name}")
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    sanitized_model_name = model_name.replace('/', '-')
     
     # Output paths
     output_paths = {
         'dir': output_dir,
-        'route_image': output_dir / f"{model_name}_route.png",
-        'extracted_image': output_dir / f"extracted_{model_name}_route.png",
-        'validated_image': output_dir / f"validated_{model_name}_route.png",
+        'route_image': output_dir / f"{sanitized_model_name}_route.png",
+        'extracted_image': output_dir / f"extracted_{sanitized_model_name}_route.png",
+        'validated_image': output_dir / f"validated_{sanitized_model_name}_route.png",
         'validation_json': output_dir / "validation_results.json",
         'final_json': output_dir / "final_results.json"
     }
