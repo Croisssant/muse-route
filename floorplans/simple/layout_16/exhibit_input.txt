@@ -1,0 +1,5 @@
+1-25: Greek
+78-80: Greek
+26-49: Mesopotamian
+50-63: Japanese
+64-77: Tang dynasty

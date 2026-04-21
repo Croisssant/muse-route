@@ -1,0 +1,7 @@
+1-16: Greek
+66-68: Greek
+28-39: Mesopotamian
+40: Mesopotamian
+41-57: Japanese
+17-27: Japanese
+58-65: Tang dynasty

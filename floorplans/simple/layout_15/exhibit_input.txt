@@ -1,0 +1,4 @@
+1-10: Japanese
+22-23: Japanese
+11-21: Greek
+24-29: Greek
