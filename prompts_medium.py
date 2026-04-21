@@ -43,6 +43,9 @@ def parse_arguments():
         
         # Run with a local HuggingFace model
         python prompts_easy_semantic.py --backend huggingface --model google/gemma-4-31B-it
+        
+        # Run with Ollama
+        python prompts_medium.py --backend ollama --model qwen3.6
 
         # Run with all defaults
         python prompts_medium.py
@@ -67,7 +70,7 @@ def parse_arguments():
     # Validation fields
 
     parser.add_argument('--backend', type=str, default='openai',
-                    choices=['openai', 'huggingface'],
+                    choices=['openai', 'huggingface', 'ollama'],
                     help='Model backend to use (default: openai)')
 
 

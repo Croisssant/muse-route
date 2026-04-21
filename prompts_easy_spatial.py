@@ -42,6 +42,9 @@ def parse_arguments():
         # Run with a local HuggingFace model
         python prompts_easy_spatial.py --backend huggingface --model google/gemma-4-31B-it
         
+        # Run with Ollama
+        python prompts_easy_spatial.py --backend ollama --model qwen3.6
+        
         # Override model and difficulty
         python prompts_easy_spatial.py --model gpt-4 --difficulty easy_semantic
         
@@ -60,7 +63,7 @@ def parse_arguments():
     )
     
     parser.add_argument('--backend', type=str, default='openai',
-                    choices=['openai', 'huggingface'],
+                    choices=['openai', 'huggingface', 'ollama'],
                     help='Model backend to use (default: openai)')
 
     # Validation fields

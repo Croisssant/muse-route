@@ -66,7 +66,7 @@ def parse_arguments():
     
     # Validation fields
     parser.add_argument('--backend', type=str, default='openai',
-                    choices=['openai', 'huggingface'],
+                    choices=['openai', 'huggingface', 'ollama'],
                     help='Model backend to use (default: openai)')
 
 
@@ -208,6 +208,8 @@ FILENAMES = {
     'annotations': ANNOTATIONS_FILENAME
 }
 
+BACKEND = build_backend(args.backend, args.model, args.reasoning)
+
 # ========================================
 
 
@@ -237,8 +239,7 @@ def setup_layout_logger(log_file_path):
     return logger
 
 
-def process_layout(layout_folder, config_variant, config_path, model_name, difficulty, complexity, 
-                   backend_type, reasoning_effort, pbar=None):
+def process_layout(layout_folder, config_variant, config_path, model_name, difficulty, complexity, pbar=None):
     """Process a single layout folder with a specific config file.
     
     Args:
@@ -248,14 +249,9 @@ def process_layout(layout_folder, config_variant, config_path, model_name, diffi
         model_name: Name of the model to use
         difficulty: Difficulty level
         complexity: Complexity level
-        backend_type: Backend type ("openai" or "huggingface")
-        reasoning_effort: Reasoning effort parameter
         pbar: Optional tqdm progress bar to update
     """
     layout_name = layout_folder.name
-    
-    # Create backend fresh for this config (important for memory management)
-    backend = build_backend(backend_type, model_name, reasoning_effort)
     
     # Update progress bar if provided
     if pbar:
@@ -386,19 +382,9 @@ def process_layout(layout_folder, config_variant, config_path, model_name, diffi
             f.write("="*70 + "\n\n")
             f.write(user_prompt_selection)
 
-        text_output_selection = prompt_model(backend, system_prompt_selection, user_prompt_selection, image_base64)
+        text_output_selection = prompt_model(BACKEND, system_prompt_selection, user_prompt_selection, image_base64)
         gpt_selected_exhibits = exhibit_selection(text_output_selection, exhibits_list)
         # print(f"Selected exhibits: {gpt_selected_exhibits}")
-        
-        # Clear GPU cache before next generation (critical for memory management)
-        if backend_type == "huggingface":
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    logger.info("GPU cache cleared between calls")
-            except Exception:
-                pass
         
         # -------- Route Planning --------
         system_prompt_route = f"""
@@ -515,7 +501,7 @@ def process_layout(layout_folder, config_variant, config_path, model_name, diffi
             f.write("="*70 + "\n\n")
             f.write(user_prompt_route)
 
-        text_output_route = prompt_model(backend, system_prompt_route, user_prompt_route, image_base64)
+        text_output_route = prompt_model(BACKEND, system_prompt_route, user_prompt_route, image_base64)
         
         parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
         logger.info(f"Route saved to: {output_paths['route_image']}")
@@ -602,18 +588,6 @@ def process_layout(layout_folder, config_variant, config_path, model_name, diffi
         print(f"✗ {complexity}/{layout_name}: {str(e)[:50]}")
         
         return False
-    
-    finally:
-        # Memory cleanup: Delete backend and free GPU memory
-        del backend
-        if backend_type == "huggingface":
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    logger.info("GPU cache cleared")
-            except Exception:
-                pass  # Silently ignore if torch not available
 
 
 def main():
@@ -683,12 +657,7 @@ def main():
         
         for complexity, layout_folder, config_variant, config_path in pbar:
             key = f"{complexity}/{layout_folder.name}/{config_variant}"
-            success = process_layout(
-                layout_folder, config_variant, config_path, 
-                MODEL, DIFFICULTY, complexity,
-                args.backend, args.reasoning,  # Pass backend parameters
-                pbar=pbar
-            )
+            success = process_layout(layout_folder, config_variant, config_path, MODEL, DIFFICULTY, complexity, pbar=pbar)
             results[key] = "Success" if success else "Failed"
     
     # Summary

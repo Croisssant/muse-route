@@ -165,6 +165,41 @@ class HuggingFaceBackend(ModelBackend):
                 f"Try checking the model's documentation for the correct API usage."
             )
  
+
+class OllamaBackend(ModelBackend):
+    """Backend for Ollama models (local or remote)."""
+ 
+    def __init__(self, model: str):
+        try:
+            from ollama import chat
+            self.chat = chat
+        except ImportError:
+            raise ImportError(
+                "The 'ollama' package is required for OllamaBackend. "
+                "Install it with: pip install ollama"
+            )
+        self.model = model
+ 
+    def prompt(self, system_prompt: str, user_prompt: str, image_base64: str) -> str:
+        messages = [
+            {
+                'role': 'system',
+                'content': system_prompt
+            },
+            {
+                'role': 'user',
+                'content': user_prompt,
+                'images': [image_base64]
+            }
+        ]
+        
+        response = self.chat(
+            model=self.model,
+            messages=messages
+        )
+        
+        return response.message.content.strip()
+ 
  
 # ===========================================================================
 # Unified prompt entry-point
@@ -175,13 +210,13 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
     Factory function to instantiate the correct ModelBackend.
     
     Args:
-        backend_type: Either "openai" or "huggingface"
+        backend_type: Either "openai", "huggingface", or "ollama"
         model: Model name/identifier
         reasoning_effort: Optional reasoning effort for OpenAI models
         **pipeline_kwargs: Additional keyword arguments for HuggingFace pipeline
     
     Returns:
-        ModelBackend instance (OpenAIBackend or HuggingFaceBackend)
+        ModelBackend instance (OpenAIBackend, HuggingFaceBackend, or OllamaBackend)
     
     Example:
         # OpenAI
@@ -189,6 +224,9 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
         
         # HuggingFace
         backend = build_backend("huggingface", "google/gemma-4-31B-it")
+        
+        # Ollama
+        backend = build_backend("ollama", "qwen3.6")
     """
     if backend_type == "openai":
         from openai import OpenAI
@@ -198,8 +236,11 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
     elif backend_type == "huggingface":
         return HuggingFaceBackend(model, **pipeline_kwargs)
     
+    elif backend_type == "ollama":
+        return OllamaBackend(model)
+    
     else:
-        raise ValueError(f"Unknown backend type: {backend_type!r}. Must be 'openai' or 'huggingface'")
+        raise ValueError(f"Unknown backend type: {backend_type!r}. Must be 'openai', 'huggingface', or 'ollama'")
  
 def prompt_model(backend: ModelBackend,
                  system_prompt: str,

@@ -15,30 +15,47 @@ if sys.platform == 'win32':
 def parse_arguments():
     """Parse command-line arguments for the master script."""
     parser = argparse.ArgumentParser(
-        description='Master Script - Run all prompt scripts (Easy Semantic, Easy Spatial, Medium, Hard) concurrently',
+        description='Master Script - Run all prompt scripts (Easy Semantic, Easy Spatial, Medium, Hard)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with model and reasoning
-  python run_all_prompts.py --model gpt-4 --reasoning extended
+  # Run with Ollama (synchronous by default)
+  python run_all_prompts.py --backend ollama --model qwen3.6
 
-  # Run without reasoning
-  python run_all_prompts.py --model gpt-5.4
+  # Run with OpenAI (synchronous by default)
+  python run_all_prompts.py --backend openai --model gpt-5.4
+
+  # Run with model and reasoning
+  python run_all_prompts.py --backend openai --model gpt-4 --reasoning extended
+
+  # Run asynchronously for speed (OpenAI/HuggingFace)
+  python run_all_prompts.py --backend openai --model gpt-5.4 --execution-mode async
 
   # Process specific complexities
-  python run_all_prompts.py --model gpt-4o --complexity-mode list --complexity simple complex
+  python run_all_prompts.py --backend ollama --model qwen3.6 --complexity-mode list --complexity simple complex
 
   # Process specific layouts
-  python run_all_prompts.py --model gpt-4 --layout-mode list --layouts layout_01 layout_02
+  python run_all_prompts.py --backend openai --model gpt-4 --layout-mode list --layouts layout_01 layout_02
         """
     )
     
+    # Backend configuration
+    parser.add_argument('--backend', type=str, required=True,
+                       choices=['openai', 'huggingface', 'ollama'],
+                       help='Model backend to use (required)')
+    
     # Model configuration
     parser.add_argument('--model', type=str, required=True,
-                       help='Model name to use (e.g., gpt-4, gpt-5.4, gpt-4o)')
+                       help='Model name to use (e.g., gpt-4, gpt-5.4, qwen3.6)')
     
     parser.add_argument('--reasoning', type=str, default=None,
                        help='Reasoning mode (e.g., extended, standard, or None/omit for no reasoning)')
+    
+    # Execution mode
+    parser.add_argument('--execution-mode', type=str, 
+                       choices=['sync', 'async'],
+                       default='sync',
+                       help='Execution mode: sync (sequential, default) or async (concurrent)')
     
     # Complexity selection
     parser.add_argument('--complexity-mode', type=str, 
@@ -99,12 +116,13 @@ def setup_master_logger(log_file_path):
     return logger
 
 
-async def run_script(script_name, script_label, model, reasoning, args, logger, position=0):
+async def run_script(script_name, script_label, backend, model, reasoning, args, logger, position=0):
     """Run a single prompt script asynchronously, streaming output to console.
     
     Args:
         script_name: Name of the Python script to run
         script_label: Label for display (e.g., "Semantic", "Spatial")
+        backend: Backend type (openai, huggingface, ollama)
         model: Model name
         reasoning: Reasoning mode
         args: Parsed arguments from main script
@@ -121,6 +139,7 @@ async def run_script(script_name, script_label, model, reasoning, args, logger, 
         sys.executable,  # Use same Python interpreter
         '-u',  # Unbuffered output for real-time progress updates
         script_name,
+        '--backend', backend,
         '--model', model,
         '--complexity-mode', args.complexity_mode,
         '--layout-mode', args.layout_mode,
@@ -204,12 +223,111 @@ async def run_all_scripts(args, logger):
     
     # Launch all scripts concurrently with positioned progress bars
     tasks = [
-        run_script(script_name, label, args.model, args.reasoning, args, logger, position=idx)
+        run_script(script_name, label, args.backend, args.model, args.reasoning, args, logger, position=idx)
         for idx, (script_name, label) in enumerate(scripts)
     ]
     
     # Wait for all to complete (even if some fail)
     results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    return results
+
+
+def run_script_sync(script_name, script_label, backend, model, reasoning, args, logger):
+    """Run a single prompt script synchronously.
+    
+    Args:
+        script_name: Name of the Python script to run
+        script_label: Label for display (e.g., "Semantic", "Spatial")
+        backend: Backend type (openai, huggingface, ollama)
+        model: Model name
+        reasoning: Reasoning mode
+        args: Parsed arguments from main script
+        logger: Master logger instance
+    
+    Returns:
+        tuple: (script_name, success, error_message)
+    """
+    import subprocess
+    
+    logger.info(f"[{script_label}] Starting {script_name}")
+    
+    # Build command
+    cmd = [
+        sys.executable,
+        '-u',
+        script_name,
+        '--backend', backend,
+        '--model', model,
+        '--complexity-mode', args.complexity_mode,
+        '--layout-mode', args.layout_mode,
+        '--floorplan-dir', args.floorplan_dir,
+        '--results-dir', args.results_dir,
+    ]
+    
+    # Add reasoning if provided
+    if reasoning:
+        cmd.extend(['--reasoning', reasoning])
+    
+    # Add complexity arguments
+    if args.complexity_mode != 'all':
+        cmd.append('--complexity')
+        cmd.extend(args.complexity)
+    
+    # Add layout arguments
+    if args.layouts:
+        cmd.append('--layouts')
+        cmd.extend(args.layouts)
+    
+    # Progress position always 0 for sync mode (no concurrent display)
+    cmd.extend(['--progress-position', '0'])
+    
+    logger.info(f"[{script_label}] Command: {' '.join(cmd)}")
+    
+    try:
+        # Run synchronously - let output stream directly to console
+        result = subprocess.run(
+            cmd,
+            capture_output=False,  # Don't capture - let output stream directly
+            text=True
+        )
+        
+        if result.returncode == 0:
+            logger.info(f"[{script_label}] ✓ Completed successfully")
+            return (script_name, True, None)
+        else:
+            error_msg = f"Process exited with code {result.returncode}"
+            logger.error(f"[{script_label}] ✗ Failed: {error_msg}")
+            return (script_name, False, error_msg)
+            
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"[{script_label}] ✗ Exception: {error_msg}")
+        import traceback
+        logger.error(f"[{script_label}] Traceback:\n{traceback.format_exc()}")
+        return (script_name, False, error_msg)
+
+
+def run_all_scripts_sync(args, logger):
+    """Run all prompt scripts sequentially (synchronously)."""
+    
+    # Define scripts to run
+    scripts = [
+        ('prompts_easy_semantic.py', 'Semantic'),
+        ('prompts_easy_spatial.py', 'Spatial'),
+        ('prompts_medium.py', 'Medium'),
+        ('prompts_hard.py', 'Hard')
+    ]
+    
+    logger.info("="*70)
+    logger.info("Starting sequential execution of all prompt scripts")
+    logger.info("="*70)
+    
+    results = []
+    for script_name, label in scripts:
+        result = run_script_sync(script_name, label, args.backend, args.model, args.reasoning, args, logger)
+        results.append(result)
+        print()  # Empty line between scripts for readability
     
     return results
 
@@ -226,13 +344,18 @@ def main():
     master_log_path = base_results / output_folder / "master_execution.log"
     logger = setup_master_logger(master_log_path)
     
+    # Determine execution mode label
+    execution_label = "SEQUENTIAL" if args.execution_mode == 'sync' else "CONCURRENT"
+    
     # Display configuration
     print("="*70)
-    print("MASTER SCRIPT - CONCURRENT PROMPT EXECUTION")
+    print(f"MASTER SCRIPT - {execution_label} PROMPT EXECUTION")
     print("="*70)
     print(f"\nConfiguration:")
+    print(f"  Backend: {args.backend}")
     print(f"  Model: {args.model}")
     print(f"  Reasoning: {args.reasoning if args.reasoning else 'None'}")
+    print(f"  Execution Mode: {args.execution_mode}")
     print(f"  Output Folder: {output_folder}")
     print(f"  Complexity Mode: {args.complexity_mode}")
     if args.complexity_mode != 'all':
@@ -247,11 +370,16 @@ def main():
     print()
     
     logger.info("Master script started")
-    logger.info(f"Model: {args.model}, Reasoning: {args.reasoning}, Output folder: {output_folder}")
+    logger.info(f"Backend: {args.backend}, Model: {args.model}, Reasoning: {args.reasoning}, Output folder: {output_folder}")
+    logger.info(f"Execution mode: {args.execution_mode}")
     
-    # Run scripts concurrently
-    print("Running both scripts concurrently...\n")
-    results = asyncio.run(run_all_scripts(args, logger))
+    # Run scripts based on execution mode
+    if args.execution_mode == 'sync':
+        print("Running all scripts sequentially (synchronous mode)...\n")
+        results = run_all_scripts_sync(args, logger)
+    else:
+        print("Running all scripts concurrently (async mode)...\n")
+        results = asyncio.run(run_all_scripts(args, logger))
     
     # Process results
     print("\n" + "="*70)
