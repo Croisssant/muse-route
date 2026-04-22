@@ -75,11 +75,11 @@ def parse_arguments():
                        help='SVR validation fields to include in final_results.json (default: connectivity wall_crossings exhibit_collision out_of_area_violations)')
     
     parser.add_argument('--scsr-fields', nargs='+',
-                       default=['start_end_location'],
+                       default=['start_end_location', 'must_pass_regions', 'restricted_area_violations', 'distance_budget'],
                        help='SCSR validation fields to include in final_results.json (default: start_end_location)')
     
     parser.add_argument('--scar-fields', nargs='+',
-                       default=['exhibit_category_coverage', 'attribute_validations'],
+                       default=['specific_exhibit_coverage', 'at_least_n_exhibits_coverage', 'exhibit_category_coverage', 'attribute_validations'],
                        help='SCAR validation fields to include in final_results.json (default: exhibit_category_coverage attribute_validations)')
     
     # Model configuration

@@ -72,9 +72,8 @@ def main():
     configs = load_json(config_file)
 
     # Value calculations from configs and annotations
-    mm_per_px = None
-    if annotations_values != {}:
-        mm_per_px = annotations_values['distance_in_mm'][0]['mm_per_px']
+    distance_entries = annotations_values.get('distance_in_mm', [])
+    mm_per_px = distance_entries[0].get("mm_per_px") if distance_entries else None
     
     # Calculate proximity_threshold from config
     proximity_threshold_px = None
@@ -130,7 +129,7 @@ def main():
         "start_end_location": "entrance_violations" not in violation_reasons and "exit_violations" not in violation_reasons,
         "must_pass_regions": "must_see_gallery_violations" not in violation_reasons,
         "restricted_area_violations": "forbidden_area_violations" in violation_reasons,
-        "distance_budget": route_extraction_results.route_distance * mm_per_px < configs["distance_budget_in_mm"]
+        "distance_budget": (route_extraction_results.route_distance * mm_per_px < configs["distance_budget_in_mm"]) if mm_per_px is not None else None
     }
 
     validation_result['validation_summary']['route_pixels_breakdown'] = violation_counts

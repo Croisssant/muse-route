@@ -919,7 +919,7 @@ class RouteExtractor:
     # ──────────────────────────────────────────────────────────────────
 
     def _sample_route_color(self, aligned_route, candidate_mask, original_img,
-                            min_saturation=30, presence_threshold=0.02):
+                            min_saturation=50, presence_threshold=0.01):
         """
         Sample colors at candidate route pixels, identify the most dominant
         color bin, and confirm it is absent (or rare) in the original image.
@@ -939,12 +939,14 @@ class RouteExtractor:
         4.  For each bin (most frequent first):
               a.  Skip achromatic / near-black bins (low saturation) — they are
                   background artefacts, not a deliberately drawn colour.
-              b.  Build a tolerant HSV range around the bin centre, handling
+              b.  Validate that the bin represents a significant portion of
+                  candidate pixels (at least 10%).
+              c.  Build a tolerant HSV range around the bin centre, handling
                   red-hue wrap-around (H ≈ 0° / 180°).
-              c.  Count how many pixels in the *original* image fall in that
+              d.  Count how many pixels in the *original* image fall in that
                   range.  If the fraction exceeds presence_threshold, the colour
                   is too common in the map background → try the next bin.
-              d.  Accept the first bin that passes the presence test.
+              e.  Accept the first bin that passes all validation tests.
 
         Parameters
         ----------
@@ -952,10 +954,10 @@ class RouteExtractor:
         candidate_mask     : uint8 binary mask of candidate route pixels
         original_img       : BGR reference image
         min_saturation     : HSV-S floor; bins below this are skipped as
-                             achromatic artefacts (default 30)
+                             achromatic artefacts (default 50, increased from 30)
         presence_threshold : maximum fraction of original-image pixels that may
                              share the dominant colour before it is rejected
-                             (default 0.02 = 2 %)
+                             (default 0.01 = 1%, reduced from 2% for stricter matching)
 
         Returns
         -------
@@ -973,8 +975,9 @@ class RouteExtractor:
         hsv_pixels   = hsv_route[ys, xs]   # shape (N, 3): H in [0,179], S,V in [0,255]
 
         # ── Quantize ──────────────────────────────────────────────────
-        # H → 18 bins (10° each), S → 8 bins (32 levels), V → 4 bins (64 levels)
-        H_bin = (hsv_pixels[:, 0].astype(np.int32) // 10)   # 0–17
+        # H → 36 bins (5° each), S → 8 bins (32 levels), V → 4 bins (64 levels)
+        # Finer hue binning (5° instead of 10°) for better color discrimination
+        H_bin = (hsv_pixels[:, 0].astype(np.int32) // 5)    # 0–35
         S_bin = (hsv_pixels[:, 1].astype(np.int32) // 32)   # 0–7
         V_bin = (hsv_pixels[:, 2].astype(np.int32) // 64)   # 0–3
         keys  = H_bin * 32 + S_bin * 4 + V_bin              # unique per (H,S,V) triple
@@ -983,32 +986,44 @@ class RouteExtractor:
         order = np.argsort(-counts)   # most-frequent first
 
         total_orig_px = float(hsv_original.shape[0] * hsv_original.shape[1])
-        print(f"    [Color sampling] {len(ys)} candidate pixels → "
+        total_candidate_px = len(ys)
+        print(f"    [Color sampling] {total_candidate_px} candidate pixels → "
               f"{len(unique_keys)} quantized bins")
 
         # ── Evaluate bins, most frequent first ────────────────────────
         for rank, idx in enumerate(order):
             key   = int(unique_keys[idx])
             count = int(counts[idx])
+            
+            # Skip bins with too few pixels
             if count < 5:
                 break   # all remaining bins are negligible
+            
+            # Validate that dominant color represents a significant portion
+            # (at least 10% of candidate pixels) to avoid picking up noise
+            color_fraction = count / total_candidate_px
+            if rank == 0 and color_fraction < 0.10:
+                print(f"    [Color sampling] Dominant bin only {color_fraction:.1%} "
+                      f"of candidates — likely noisy mask, aborting color-based detection")
+                return None
 
             h_bin = key  // 32
             s_bin = (key %  32) // 4
             v_bin = key  %   4
 
-            h_c = h_bin * 10 + 5    # bin centre values
+            h_c = h_bin * 5 + 2.5   # bin centre values (adjusted for 5° bins)
             s_c = s_bin * 32 + 16
             v_c = v_bin * 64 + 32
 
             # Skip achromatic / near-black pixels (not a coloured route)
             if s_c < min_saturation:
-                print(f"    [Color sampling] Rank {rank+1}: H≈{h_c}° S={s_c} V={v_c} "
-                      f"count={count} — skipped (low saturation)")
+                print(f"    [Color sampling] Rank {rank+1}: H≈{h_c:.1f}° S={s_c} V={v_c} "
+                      f"count={count} ({color_fraction:.1%}) — skipped (low saturation < {min_saturation})")
                 continue
 
-            # ── Tolerant range around bin centre ──────────────────────
-            h_tol, s_tol, v_tol = 15, 50, 70
+            # ── Tighter tolerant range around bin centre ──────────────
+            # Reduced from (15, 50, 70) to (10, 35, 50) for stricter matching
+            h_tol, s_tol, v_tol = 10, 35, 50
 
             s_lo = int(max(0,   s_c - s_tol))
             s_hi = int(min(255, s_c + s_tol))
@@ -1036,12 +1051,13 @@ class RouteExtractor:
 
             orig_ratio = cv2.countNonZero(orig_mask) / total_orig_px
 
-            print(f"    [Color sampling] Rank {rank+1}: H≈{h_c}°±{h_tol} "
+            print(f"    [Color sampling] Rank {rank+1}: H≈{h_c:.1f}°±{h_tol} "
                   f"S={s_c}±{s_tol} V={v_c}±{v_tol} — "
-                  f"count={count}, orig presence={orig_ratio:.3%}")
+                  f"count={count} ({color_fraction:.1%}), orig presence={orig_ratio:.3%}")
 
             if orig_ratio <= presence_threshold:
-                print(f"    ✅ Route colour confirmed: HSV ≈ ({h_c}, {s_c}, {v_c})")
+                print(f"    ✅ Route colour confirmed: HSV ≈ ({h_c:.1f}, {s_c}, {v_c}) "
+                      f"[{color_fraction:.1%} of candidates, {orig_ratio:.3%} in original]")
                 return {'lo1': lo1, 'hi1': hi1, 'lo2': lo2, 'hi2': hi2}
 
             print(f"       ↳ Too common in original ({orig_ratio:.3%} > "
@@ -1161,11 +1177,45 @@ class RouteExtractor:
                     cv2.inRange(hsv_aligned,
                                 color_result['lo2'], color_result['hi2']))
 
+            # ── Post-processing: remove noise with morphological opening ──
+            # This removes small isolated pixels that might have been picked up
+            # due to color noise or compression artifacts
+            kernel_clean = np.ones((2, 2), np.uint8)
+            color_mask = cv2.morphologyEx(color_mask, cv2.MORPH_OPEN, 
+                                         kernel_clean, iterations=1)
+            
+            # ── Keep only significant connected components ────────────────
+            # Remove tiny fragments that are likely noise
+            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+                color_mask, connectivity=8)
+            
+            if num_labels > 1:  # 0 is background
+                # Calculate minimum size threshold (0.5% of largest component)
+                areas = [stats[i, cv2.CC_STAT_AREA] for i in range(1, num_labels)]
+                if areas:
+                    max_area = max(areas)
+                    min_area = max(10, int(max_area * 0.005))  # at least 10 pixels or 0.5% of largest
+                    
+                    # Create clean mask keeping only significant components
+                    clean_mask = np.zeros_like(color_mask)
+                    kept_components = 0
+                    for i in range(1, num_labels):
+                        if stats[i, cv2.CC_STAT_AREA] >= min_area:
+                            clean_mask[labels == i] = 255
+                            kept_components += 1
+                    
+                    if kept_components > 0:
+                        removed = num_labels - 1 - kept_components
+                        if removed > 0:
+                            print(f"    ↳ Removed {removed} small noise component(s), "
+                                  f"kept {kept_components} significant region(s)")
+                        color_mask = clean_mask
+
             # No subtraction needed: _sample_route_color already verified
             # that this colour is rare/absent in the original image, so every
             # pixel that matches the colour is genuine route.
             n_color = cv2.countNonZero(color_mask)
-            print(f"    Color-based mask pixels : {n_color}")
+            print(f"    Color-based mask pixels (after cleaning): {n_color}")
             return color_mask, True
 
         # No distinctive colour found — fall back to the diff-based mask.
