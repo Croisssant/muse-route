@@ -1,0 +1,4 @@
+1-4: Greek
+27-35: Greek
+
+5-26: Japanese

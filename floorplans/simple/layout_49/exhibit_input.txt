@@ -1,0 +1,7 @@
+1-3: Greek
+14-17: Greek
+30-35: Greek
+
+4-13: Japanese
+18: Japanese
+

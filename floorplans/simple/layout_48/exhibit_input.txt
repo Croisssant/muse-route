@@ -1,0 +1,9 @@
+29: Greek
+36-54: Greek
+
+30-35: Japanese
+24-25: Japanese
+1: Japanese
+
+2-23: Mesopotamian
+26-28: Mesopotamian
