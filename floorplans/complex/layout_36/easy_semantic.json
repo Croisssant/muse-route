@@ -14,8 +14,8 @@
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": [
-        "618",
-        "906"
+        "250",
+        "600"
       ]
     },
     "material_constraint": {

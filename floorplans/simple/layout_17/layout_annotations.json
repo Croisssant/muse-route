@@ -1,7 +1,7 @@
 {
   "metadata": {
     "total_annotations": 55,
-    "export_date": "2026-04-21T11:25:02.655818",
+    "export_date": "2026-04-22T15:23:02.733510",
     "attributes": {
       "1": {
         "aname": "Entity",
@@ -53,8 +53,8 @@
       "exits": 1,
       "floor_areas": 1,
       "forbidden_areas": 1,
-      "distance_in_mm": 0,
-      "other": 1
+      "distance_in_mm": 1,
+      "other": 0
     }
   },
   "walls": [
@@ -1551,11 +1551,10 @@
       "area": 161023
     }
   ],
-  "distance_in_mm": [],
-  "other": [
+  "distance_in_mm": [
     {
       "id": "1_qX6ptocy",
-      "annotation_number": null,
+      "annotation_number": 1,
       "shape": "rectangle",
       "coordinates": {
         "x": 348.84,
@@ -1563,7 +1562,13 @@
         "width": 1707.96,
         "height": 15.0
       },
-      "area": 25626
+      "area": 25626,
+      "description": "30000",
+      "pixel_length": 1707.96,
+      "length_mm": 30000.0,
+      "px_per_mm": 0.056932,
+      "mm_per_px": 17.564805
     }
-  ]
+  ],
+  "other": []
 }

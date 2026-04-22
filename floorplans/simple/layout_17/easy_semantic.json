@@ -13,7 +13,10 @@
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
-      "in_range": []
+      "in_range": [
+        "250",
+        "600"
+      ]
     },
     "material_constraint": {
       "materials": []

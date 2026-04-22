@@ -4,7 +4,9 @@
     "restricted": "Route cannot enter",
     "normal": "No restrictions"
   },
-  "gallery_configs": {},
+  "gallery_configs": {
+    "gallery_01": "must_see"
+  },
   "distance_budget_in_mm": 1000000000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [],
@@ -13,18 +15,13 @@
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
-      "in_range": [
-        "618",
-        "906"
-      ]
+      "in_range": []
     },
     "material_constraint": {
       "materials": []
     },
     "find_spot_constraint": {
-      "locations": [
-        "Libya"
-      ]
+      "locations": []
     },
     "technique_constraint": {
       "techniques": []
