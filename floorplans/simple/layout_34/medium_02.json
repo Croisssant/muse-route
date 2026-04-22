@@ -1,0 +1,56 @@
+{
+  "_gallery_config_options": {
+    "must_see": "Must vist route",
+    "restricted": "Route cannot enter",
+    "normal": "No restrictions"
+  },
+  "gallery_configs": {
+    "gallery_01": "must_see"
+  },
+  "distance_budget_in_mm": 1000000000,
+  "exhibit_see_distance_in_mm": 1500,
+  "exhibit_categories_to_cover": [
+    "Greek"
+  ],
+  "at_least_n_exhibits_to_cover": 10,
+  "specific_exhibit_to_cover": [],
+  "exhibit_attribute_constraints": {
+    "_comment": "Individual constraints work independently (OR logic between them)",
+    "date_constraint": {
+      "in_range": [
+        "664 BC",
+        "510 BC"
+      ]
+    },
+    "material_constraint": {
+      "materials": [
+        "glazed composition",
+        "stoneware"
+      ]
+    },
+    "find_spot_constraint": {
+      "locations": [
+        "Japan",
+        "Iraq"
+      ]
+    },
+    "technique_constraint": {
+      "techniques": []
+    },
+    "combined_constraint": {
+      "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",
+      "date_constraint": {
+        "in_range": []
+      },
+      "material_constraint": {
+        "materials": []
+      },
+      "find_spot_constraint": {
+        "locations": []
+      },
+      "technique_constraint": {
+        "techniques": []
+      }
+    }
+  }
+}

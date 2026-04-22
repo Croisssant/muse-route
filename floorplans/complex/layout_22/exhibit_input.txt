@@ -1,0 +1,17 @@
+1-5: Greek
+17-19: Greek
+30-42: Greek
+
+64-66: Mesopotamian
+6-15: Mesopotamian
+26-29: Mesopotamian
+52-53: Mesopotamian
+43-45: Mesopotamian
+
+20-25: Japanese
+16: Japanese
+46-51: Japanese
+59-63: Japanese
+
+67-76: Ancient Egyptian
+54-58: Ancient Egyptian

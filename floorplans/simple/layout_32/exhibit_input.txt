@@ -1,0 +1,39 @@
+42: Greek
+40: Greek
+47: Greek
+49: Greek
+44-45: Greek
+38: Greek
+57: Greek
+59: Greek
+76: Greek
+81: Greek
+68: Greek
+70: Greek
+72: Greek
+74: Greek
+66: Greek
+91-92: Greek
+
+67: Mesopotamian
+69: Mesopotamian
+71: Mesopotamian
+73: Mesopotamian
+75: Mesopotamian
+77-79: Mesopotamian
+80: Mesopotamian
+82-90: Mesopotamian
+
+34-37: Japanese
+39: Japanese
+41: Japanese
+43: Japanese
+46: Japanese
+48: Japanese
+50-56: Japanese
+58: Japanese
+60-65: Japanese
+27-33: Japanese
+
+1-5: Ancient Egyptian
+6-26: Ancient Egyptian

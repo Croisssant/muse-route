@@ -1,0 +1,9 @@
+1-11: Greek
+47-50: Greek
+
+12-13: Mesopotamian
+26-42: Mesopotamian
+51-52: Mesopotamian
+
+14-25: Japanese
+43-46: Japanese

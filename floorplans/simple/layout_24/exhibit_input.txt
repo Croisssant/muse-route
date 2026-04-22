@@ -1,0 +1,28 @@
+1-8: Greek
+19-20: Greek
+32: Greek
+44: Greek
+47: Greek
+64-70: Greek
+
+9-12: Mesopotamian
+31: Mesopotamian
+52-63: Mesopotamian
+64: Mesopotamian
+74: Mesopotamian
+
+10: Japanese
+13-18: Japanese
+87-94: Japanese
+98-99: Japanese
+21-27: Japanese
+
+28-30: Tang dynasty
+33: Tang dynasty
+75-86: Tang dynasty
+95-97: Tang dynasty
+
+34-43: Ancient Egyptian
+45-46: Ancient Egyptian
+48-51: Ancient Egyptian
+71-73: Ancient Egyptian

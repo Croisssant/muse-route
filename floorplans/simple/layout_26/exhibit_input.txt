@@ -1,0 +1,9 @@
+1-7: Greek
+52-58: Greek
+32: Greek
+
+8-19: Mesopotamian
+
+20-31: Japanese
+
+33-51: Ancient Egyptian

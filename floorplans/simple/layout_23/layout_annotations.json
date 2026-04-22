@@ -1,0 +1,1302 @@
+{
+  "metadata": {
+    "total_annotations": 49,
+    "export_date": "2026-04-22T09:55:09.834299",
+    "attributes": {
+      "1": {
+        "aname": "Entity",
+        "anchor_id": "FILE1_Z0_XY1",
+        "type": 3,
+        "desc": "",
+        "options": {
+          "0": "wall",
+          "1": "gallery",
+          "2": "exhibit",
+          "3": "entrance",
+          "4": "exit",
+          "5": "floor_area",
+          "6": "forbidden_area",
+          "7": "distance_in_mm"
+        },
+        "default_option_id": ""
+      },
+      "2": {
+        "aname": "Exhibit",
+        "anchor_id": "FILE1_Z0_XY1",
+        "type": 1,
+        "desc": "",
+        "options": {},
+        "default_option_id": ""
+      },
+      "3": {
+        "aname": "Gallery",
+        "anchor_id": "FILE1_Z0_XY1",
+        "type": 1,
+        "desc": "",
+        "options": {},
+        "default_option_id": ""
+      },
+      "4": {
+        "aname": "mm",
+        "anchor_id": "FILE1_Z0_XY1",
+        "type": 1,
+        "desc": "",
+        "options": {},
+        "default_option_id": ""
+      }
+    },
+    "counts": {
+      "walls": 4,
+      "galleries": 1,
+      "exhibits": 40,
+      "entrances": 1,
+      "exits": 1,
+      "floor_areas": 1,
+      "forbidden_areas": 0,
+      "distance_in_mm": 1,
+      "other": 0
+    }
+  },
+  "walls": [
+    {
+      "id": "1_IpGXkUE1",
+      "annotation_number": 1,
+      "shape": "polyline",
+      "coordinates": {
+        "points": [
+          {
+            "x": 2588.613,
+            "y": 2995.158
+          },
+          {
+            "x": 2679.878,
+            "y": 2995.158
+          },
+          {
+            "x": 2677.113,
+            "y": 2879.002
+          },
+          {
+            "x": 2848.581,
+            "y": 2879.002
+          },
+          {
+            "x": 2843.049,
+            "y": 2995.158
+          },
+          {
+            "x": 3443.187,
+            "y": 2997.924
+          },
+          {
+            "x": 3443.187,
+            "y": 2973.033
+          },
+          {
+            "x": 3487.437,
+            "y": 2978.564
+          },
+          {
+            "x": 3487.437,
+            "y": 2995.158
+          },
+          {
+            "x": 4087.575,
+            "y": 2997.924
+          },
+          {
+            "x": 4084.809,
+            "y": 2973.033
+          },
+          {
+            "x": 4098.637,
+            "y": 2973.033
+          },
+          {
+            "x": 4098.637,
+            "y": 2093.569
+          },
+          {
+            "x": 3993.544,
+            "y": 2093.569
+          },
+          {
+            "x": 3990.779,
+            "y": 1711.914
+          },
+          {
+            "x": 4101.403,
+            "y": 1711.914
+          },
+          {
+            "x": 4098.637,
+            "y": 1003.917
+          },
+          {
+            "x": 3990.779,
+            "y": 1003.917
+          },
+          {
+            "x": 3988.013,
+            "y": 688.637
+          },
+          {
+            "x": 3526.156,
+            "y": 685.872
+          },
+          {
+            "x": 3528.921,
+            "y": 453.56
+          },
+          {
+            "x": 3487.437,
+            "y": 456.326
+          },
+          {
+            "x": 3487.437,
+            "y": 478.451
+          },
+          {
+            "x": 3443.187,
+            "y": 478.451
+          },
+          {
+            "x": 3440.422,
+            "y": 456.326
+          },
+          {
+            "x": 3426.594,
+            "y": 453.56
+          },
+          {
+            "x": 3426.594,
+            "y": 508.873
+          },
+          {
+            "x": 2856.878,
+            "y": 511.638
+          },
+          {
+            "x": 2856.878,
+            "y": 622.263
+          },
+          {
+            "x": 2787.737,
+            "y": 622.263
+          },
+          {
+            "x": 2787.737,
+            "y": 594.607
+          },
+          {
+            "x": 2787.737,
+            "y": 467.388
+          },
+          {
+            "x": 2024.428,
+            "y": 472.92
+          },
+          {
+            "x": 2021.663,
+            "y": 771.606
+          },
+          {
+            "x": 1794.882,
+            "y": 771.606
+          },
+          {
+            "x": 1797.648,
+            "y": 461.857
+          },
+          {
+            "x": 799.262,
+            "y": 467.388
+          },
+          {
+            "x": 796.496,
+            "y": 453.56
+          },
+          {
+            "x": 464.623,
+            "y": 456.326
+          },
+          {
+            "x": 464.623,
+            "y": 475.685
+          },
+          {
+            "x": 450.795,
+            "y": 478.451
+          },
+          {
+            "x": 450.795,
+            "y": 719.059
+          },
+          {
+            "x": 464.623,
+            "y": 719.059
+          },
+          {
+            "x": 464.623,
+            "y": 768.84
+          },
+          {
+            "x": 459.092,
+            "y": 771.606
+          },
+          {
+            "x": 459.092,
+            "y": 2973.033
+          },
+          {
+            "x": 1858.491,
+            "y": 2975.799
+          },
+          {
+            "x": 1858.491,
+            "y": 2997.924
+          },
+          {
+            "x": 2063.147,
+            "y": 2995.158
+          },
+          {
+            "x": 2063.147,
+            "y": 3020.049
+          },
+          {
+            "x": 420.373,
+            "y": 3022.814
+          },
+          {
+            "x": 420.373,
+            "y": 425.904
+          },
+          {
+            "x": 4129.059,
+            "y": 423.139
+          },
+          {
+            "x": 4126.294,
+            "y": 3025.58
+          },
+          {
+            "x": 2588.613,
+            "y": 3022.814
+          },
+          {
+            "x": 2591.37875,
+            "y": 2997.92376
+          }
+        ],
+        "num_points": 56
+      },
+      "area": null
+    },
+    {
+      "id": "1_NCotp7Xw",
+      "annotation_number": 2,
+      "shape": "polyline",
+      "coordinates": {
+        "points": [
+          {
+            "x": 1742.336,
+            "y": 2060.381
+          },
+          {
+            "x": 2884.534,
+            "y": 2060.381
+          },
+          {
+            "x": 2884.534,
+            "y": 1427.056
+          },
+          {
+            "x": 3147.267,
+            "y": 1424.29
+          },
+          {
+            "x": 3147.267,
+            "y": 1283.244
+          },
+          {
+            "x": 2679.878,
+            "y": 1283.244
+          },
+          {
+            "x": 2679.878,
+            "y": 1313.666
+          },
+          {
+            "x": 2793.268,
+            "y": 1313.666
+          },
+          {
+            "x": 2793.268,
+            "y": 1999.538
+          },
+          {
+            "x": 1911.038,
+            "y": 1999.538
+          },
+          {
+            "x": 1911.038,
+            "y": 1310.9
+          },
+          {
+            "x": 2018.897,
+            "y": 1313.666
+          },
+          {
+            "x": 2018.897,
+            "y": 1283.244
+          },
+          {
+            "x": 1742.336,
+            "y": 1280.479
+          },
+          {
+            "x": 1742.336,
+            "y": 1308.135
+          },
+          {
+            "x": 1855.726,
+            "y": 1308.135
+          },
+          {
+            "x": 1855.72587,
+            "y": 1711.91403
+          },
+          {
+            "x": 1736.805,
+            "y": 1711.914
+          },
+          {
+            "x": 1745.10138,
+            "y": 2060.38118
+          }
+        ],
+        "num_points": 19
+      },
+      "area": null
+    },
+    {
+      "id": "1_pXfWgTBJ",
+      "annotation_number": 3,
+      "shape": "polyline",
+      "coordinates": {
+        "points": [
+          {
+            "x": 1736.805,
+            "y": 2389.489
+          },
+          {
+            "x": 1736.805,
+            "y": 2292.693
+          },
+          {
+            "x": 1875.085,
+            "y": 2292.693
+          },
+          {
+            "x": 1877.851,
+            "y": 2436.504
+          },
+          {
+            "x": 1485.134,
+            "y": 2433.739
+          },
+          {
+            "x": 1482.368,
+            "y": 2292.693
+          },
+          {
+            "x": 1526.618,
+            "y": 2289.927
+          },
+          {
+            "x": 1529.384,
+            "y": 2392.255
+          },
+          {
+            "x": 1739.57015,
+            "y": 2392.25466
+          }
+        ],
+        "num_points": 9
+      },
+      "area": null
+    },
+    {
+      "id": "1_h6CeaXd5",
+      "annotation_number": 4,
+      "shape": "polyline",
+      "coordinates": {
+        "points": [
+          {
+            "x": 3114.079,
+            "y": 2430.973
+          },
+          {
+            "x": 3111.314,
+            "y": 2292.693
+          },
+          {
+            "x": 2848.581,
+            "y": 2292.693
+          },
+          {
+            "x": 2848.581,
+            "y": 2430.973
+          },
+          {
+            "x": 3114.07948,
+            "y": 2433.73885
+          }
+        ],
+        "num_points": 5
+      },
+      "area": null
+    }
+  ],
+  "galleries": [
+    {
+      "id": "1_EiBYMAws",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 1913.8,
+        "y": 1316.43,
+        "width": 873.93,
+        "height": 672.04
+      },
+      "area": 587321,
+      "gallery_name": "gallery_01"
+    }
+  ],
+  "exhibits": [
+    {
+      "id": "1_MQAObwnl",
+      "annotation_number": 27,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1180,
+        "center_y": 1845,
+        "radius": 49.01
+      },
+      "area": 7546,
+      "exhibit_number": "1",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_loFlyiBY",
+      "annotation_number": 5,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2332,
+        "center_y": 2278,
+        "radius": 47.52
+      },
+      "area": 7093,
+      "exhibit_number": "2",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_Ru7rhgBO",
+      "annotation_number": 1,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3467,
+        "center_y": 2925,
+        "radius": 46.17
+      },
+      "area": 6697,
+      "exhibit_number": "3",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_qWmegUph",
+      "annotation_number": 2,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 4046,
+        "center_y": 2490,
+        "radius": 46.39
+      },
+      "area": 6760,
+      "exhibit_number": "4",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_ZxffYy00",
+      "annotation_number": 3,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3207,
+        "center_y": 2375,
+        "radius": 47.01
+      },
+      "area": 6942,
+      "exhibit_number": "5",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_fDeXkw7m",
+      "annotation_number": 4,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3351,
+        "center_y": 2374,
+        "radius": 47.04
+      },
+      "area": 6952,
+      "exhibit_number": "6",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_U1nEXbhq",
+      "annotation_number": 10,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3359,
+        "center_y": 1940,
+        "radius": 47
+      },
+      "area": 6939,
+      "exhibit_number": "7",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_c0hbSwM0",
+      "annotation_number": 11,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3333,
+        "center_y": 1852,
+        "radius": 45.28
+      },
+      "area": 6440,
+      "exhibit_number": "8",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_Aqki2HN8",
+      "annotation_number": 12,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3377,
+        "center_y": 1752,
+        "radius": 48.01
+      },
+      "area": 7241,
+      "exhibit_number": "9",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_XjynNdTE",
+      "annotation_number": 17,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 4056,
+        "center_y": 1348,
+        "radius": 49.5
+      },
+      "area": 7696,
+      "exhibit_number": "10",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_Ou0c7ovB",
+      "annotation_number": 16,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3351,
+        "center_y": 1357,
+        "radius": 48.09
+      },
+      "area": 7266,
+      "exhibit_number": "11",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_CpN0bXaz",
+      "annotation_number": 15,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3212,
+        "center_y": 1355,
+        "radius": 48.37
+      },
+      "area": 7351,
+      "exhibit_number": "12",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_SIEw8W78",
+      "annotation_number": 18,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3753,
+        "center_y": 738,
+        "radius": 47
+      },
+      "area": 6939,
+      "exhibit_number": "13",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_XvWUdVJZ",
+      "annotation_number": 19,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3474,
+        "center_y": 591,
+        "radius": 48.01
+      },
+      "area": 7241,
+      "exhibit_number": "14",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_NqI3L7Ie",
+      "annotation_number": 20,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3270,
+        "center_y": 568,
+        "radius": 47.1
+      },
+      "area": 6968,
+      "exhibit_number": "15",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_v5XVkONH",
+      "annotation_number": 21,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 3016,
+        "center_y": 568,
+        "radius": 48.01
+      },
+      "area": 7241,
+      "exhibit_number": "16",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_XHbUJSwx",
+      "annotation_number": 23,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2401,
+        "center_y": 545,
+        "radius": 47.1
+      },
+      "area": 6968,
+      "exhibit_number": "17",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_a62ZxXDl",
+      "annotation_number": 22,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2830,
+        "center_y": 709,
+        "radius": 48.04
+      },
+      "area": 7250,
+      "exhibit_number": "18",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_1l2AqI3c",
+      "annotation_number": 14,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2358,
+        "center_y": 1115,
+        "radius": 47.04
+      },
+      "area": 6952,
+      "exhibit_number": "19",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_cFtUeEBX",
+      "annotation_number": 13,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2357,
+        "center_y": 1322,
+        "radius": 47.04
+      },
+      "area": 6952,
+      "exhibit_number": "20",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_ewIi5muJ",
+      "annotation_number": 9,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2732,
+        "center_y": 1639,
+        "radius": 47.04
+      },
+      "area": 6952,
+      "exhibit_number": "21",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_WBQpacwe",
+      "annotation_number": 8,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2584,
+        "center_y": 1927,
+        "radius": 48.17
+      },
+      "area": 7288,
+      "exhibit_number": "22",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_X15YOPIM",
+      "annotation_number": 7,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2342,
+        "center_y": 1929,
+        "radius": 48.09
+      },
+      "area": 7266,
+      "exhibit_number": "23",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_gt8YBtUe",
+      "annotation_number": 6,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 2101,
+        "center_y": 1927,
+        "radius": 49.16
+      },
+      "area": 7593,
+      "exhibit_number": "24",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_BpcaTetC",
+      "annotation_number": 28,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1962,
+        "center_y": 1630,
+        "radius": 47.85
+      },
+      "area": 7194,
+      "exhibit_number": "25",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_Of9CDwqx",
+      "annotation_number": 26,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1621,
+        "center_y": 2339,
+        "radius": 46.1
+      },
+      "area": 6675,
+      "exhibit_number": "26",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_YwwMGdQn",
+      "annotation_number": 29,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1796,
+        "center_y": 1515,
+        "radius": 49.04
+      },
+      "area": 7555,
+      "exhibit_number": "27",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_lSqmHrnN",
+      "annotation_number": 30,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1178,
+        "center_y": 1318,
+        "radius": 49.01
+      },
+      "area": 7546,
+      "exhibit_number": "28",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_Y9YqGXxl",
+      "annotation_number": 31,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1177,
+        "center_y": 1113,
+        "radius": 47
+      },
+      "area": 6939,
+      "exhibit_number": "29",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_5oIHvX6r",
+      "annotation_number": 32,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1497,
+        "center_y": 538,
+        "radius": 49.01
+      },
+      "area": 7546,
+      "exhibit_number": "30",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_ZIjmZyIv",
+      "annotation_number": 33,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1223,
+        "center_y": 653,
+        "radius": 48.09
+      },
+      "area": 7266,
+      "exhibit_number": "31",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_dWowWcKP",
+      "annotation_number": 34,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 992,
+        "center_y": 536,
+        "radius": 49.04
+      },
+      "area": 7555,
+      "exhibit_number": "32",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_RXDz8E3i",
+      "annotation_number": 40,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 565.0955,
+        "center_y": 1003.04492,
+        "radius": 47.71
+      },
+      "area": 7151,
+      "exhibit_number": "33",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_NKk1DhfA",
+      "annotation_number": 39,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 563.32965,
+        "center_y": 1483.3767,
+        "radius": 47.71
+      },
+      "area": 7151,
+      "exhibit_number": "34",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_XobvW2Pd",
+      "annotation_number": 38,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 738.15592,
+        "center_y": 1834.79512,
+        "radius": 45.95
+      },
+      "area": 6632,
+      "exhibit_number": "35",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_aslma2Uh",
+      "annotation_number": 37,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 565.09572,
+        "center_y": 2371.63624,
+        "radius": 52.92
+      },
+      "area": 8797,
+      "exhibit_number": "36",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_v8aXrJQN",
+      "annotation_number": 36,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 566.86199,
+        "center_y": 2664.78002,
+        "radius": 46.22
+      },
+      "area": 6710,
+      "exhibit_number": "37",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_VTuOdIEV",
+      "annotation_number": 35,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 911.21727,
+        "center_y": 2871.39347,
+        "radius": 47.71
+      },
+      "area": 7151,
+      "exhibit_number": "38",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_e95tbdI8",
+      "annotation_number": 25,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1307,
+        "center_y": 2870,
+        "radius": 48.37
+      },
+      "area": 7351,
+      "exhibit_number": "39",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    },
+    {
+      "id": "1_k8wiOXpz",
+      "annotation_number": 24,
+      "shape": "circle",
+      "coordinates": {
+        "center_x": 1711,
+        "center_y": 2870,
+        "radius": 48.04
+      },
+      "area": 7250,
+      "exhibit_number": "40",
+      "artifact_info": {
+        "name": null,
+        "description": null,
+        "period": null,
+        "collection": null,
+        "notes": null
+      }
+    }
+  ],
+  "entrances": [
+    {
+      "id": "1_KLjqtKMz",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 1864.02,
+        "y": 2547.13,
+        "width": 403.78,
+        "height": 448.03
+      },
+      "area": 180904
+    }
+  ],
+  "exits": [
+    {
+      "id": "1_CjtxFsPv",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 2284.4,
+        "y": 2547.13,
+        "width": 392.72,
+        "height": 448.03
+      },
+      "area": 175948
+    }
+  ],
+  "floor_areas": [
+    {
+      "id": "1_DBhgbIJX",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 409.31,
+        "y": 417.61,
+        "width": 3728.05,
+        "height": 2613.5
+      },
+      "area": 9743259
+    }
+  ],
+  "forbidden_areas": [],
+  "distance_in_mm": [
+    {
+      "id": "1_yRw1XhMd",
+      "annotation_number": 1,
+      "shape": "rectangle",
+      "coordinates": {
+        "x": 442.5,
+        "y": 69.14,
+        "width": 3667.2,
+        "height": 77.44
+      },
+      "area": 283977,
+      "description": "25690",
+      "pixel_length": 3667.2,
+      "length_mm": 25690.0,
+      "px_per_mm": 0.142748,
+      "mm_per_px": 7.005341
+    }
+  ],
+  "other": []
+}
