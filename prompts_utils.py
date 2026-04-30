@@ -169,16 +169,16 @@ class HuggingFaceBackend(ModelBackend):
 class OllamaBackend(ModelBackend):
     """Backend for Ollama models (local or remote)."""
  
-    def __init__(self, model: str):
+    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434"):
         try:
-            from ollama import chat
-            self.chat = chat
+            from ollama import Client
         except ImportError:
             raise ImportError(
                 "The 'ollama' package is required for OllamaBackend. "
                 "Install it with: pip install ollama"
             )
         self.model = model
+        self.client = Client(host=base_url)
  
     def prompt(self, system_prompt: str, user_prompt: str, image_base64: str) -> str:
         messages = [
@@ -193,12 +193,12 @@ class OllamaBackend(ModelBackend):
             }
         ]
         
-        response = self.chat(
+        response = self.client.chat(
             model=self.model,
             messages=messages
         )
         
-        return response.message.content.strip()
+        return response['message']['content'].strip()
  
  
 # ===========================================================================
@@ -213,7 +213,7 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
         backend_type: Either "openai", "huggingface", or "ollama"
         model: Model name/identifier
         reasoning_effort: Optional reasoning effort for OpenAI models
-        **pipeline_kwargs: Additional keyword arguments for HuggingFace pipeline
+        **pipeline_kwargs: Additional keyword arguments for HuggingFace pipeline or Ollama (e.g., base_url)
     
     Returns:
         ModelBackend instance (OpenAIBackend, HuggingFaceBackend, or OllamaBackend)
@@ -225,8 +225,11 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
         # HuggingFace
         backend = build_backend("huggingface", "google/gemma-4-31B-it")
         
-        # Ollama
+        # Ollama (default)
         backend = build_backend("ollama", "qwen3.6")
+        
+        # Ollama with custom base_url (for different GPU/port)
+        backend = build_backend("ollama", "qwen3.6", base_url="http://127.0.0.1:11435")
     """
     if backend_type == "openai":
         from openai import OpenAI
@@ -237,7 +240,8 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
         return HuggingFaceBackend(model, **pipeline_kwargs)
     
     elif backend_type == "ollama":
-        return OllamaBackend(model)
+        base_url = pipeline_kwargs.pop("base_url", "http://127.0.0.1:11434")
+        return OllamaBackend(model, base_url=base_url)
     
     else:
         raise ValueError(f"Unknown backend type: {backend_type!r}. Must be 'openai', 'huggingface', or 'ollama'")
@@ -265,7 +269,43 @@ def exhibit_selection(text_output_selection, exhibits_list):
     print("Selected exhibit IDs:", selected_ids)
 
     # Filter exhibits
-    return  [e for e in exhibits_list if e["exhibit_number"] in selected_ids]
+    selected_exhibits = [e for e in exhibits_list if e["exhibit_number"] in selected_ids]
+    
+    # Validate that exhibits were actually selected
+    if not selected_exhibits:
+        raise ValueError(f"No exhibits found matching selected IDs: {selected_ids}")
+    
+    return selected_exhibits
+
+
+def create_failure_final_results(svr_fields, scsr_fields, scar_fields):
+    """
+    Create a final_results.json structure indicating complete failure.
+    All validation checks should fail according to metrics.py expectations.
+    
+    Args:
+        svr_fields: List of SVR field names to include
+        scsr_fields: List of SCSR field names to include
+        scar_fields: List of SCAR field names to include
+    
+    Returns:
+        Dict with svr, scsr, and scar sections populated with failure values
+    """
+    # SVR: connectivity should be False (disconnected), others should be True (violations present)
+    svr = {field: False if field == 'connectivity' else True for field in svr_fields}
+    
+    # SCSR: Most should be False (not satisfied), except violation fields which should be True
+    scsr = {}
+    for field in scsr_fields:
+        if 'violation' in field:
+            scsr[field] = True  # Violations present = True
+        else:
+            scsr[field] = False  # Requirements not satisfied = False
+    
+    # SCAR: All should be False (coverage not satisfied)
+    scar = {field: False for field in scar_fields}
+    
+    return {"svr": svr, "scsr": scsr, "scar": scar}
 
 
 def parse_route_and_save(input_image_path, output_image_path, text_output_route):
@@ -300,10 +340,11 @@ def parse_route_and_save(input_image_path, output_image_path, text_output_route)
             invalid_points.append(f"Point {i}: ({x}, {y})")
 
     if invalid_points:
-        print("WARNING: Found out-of-bounds coordinates:")
+        error_msg = "Found out-of-bounds coordinates:\n"
         for point in invalid_points:
-            print(f"  {point}")
-        print(f"  Valid range: 0 <= x < {img_width}, 0 <= y < {img_height}")
+            error_msg += f"  {point}\n"
+        error_msg += f"  Valid range: 0 <= x < {img_width}, 0 <= y < {img_height}"
+        raise ValueError(error_msg)
 
     # -------- Draw route --------
     draw = ImageDraw.Draw(image)

@@ -30,6 +30,12 @@ Examples:
 
   # Run asynchronously for speed (OpenAI/HuggingFace)
   python run_all_prompts.py --backend openai --model gpt-5.4 --execution-mode async
+  
+  # Run with Ollama on custom port
+  python run_all_prompts.py --backend ollama --model qwen3.6 --base-url http://127.0.0.1:11435
+  
+  # Run with timeout per layout
+  python run_all_prompts.py --backend ollama --model qwen3.6 --timeout 300
 
   # Process specific complexities
   python run_all_prompts.py --backend ollama --model qwen3.6 --complexity-mode list --complexity simple complex
@@ -83,6 +89,14 @@ Examples:
     
     parser.add_argument('--results-dir', type=str, default='results',
                        help='Base directory for results (default: results)')
+    
+    # Ollama configuration
+    parser.add_argument('--base-url', type=str, default='http://127.0.0.1:11434',
+                       help='Base URL for Ollama backend (default: http://127.0.0.1:11434)')
+    
+    # Timeout configuration
+    parser.add_argument('--timeout', type=int, default=None,
+                       help='Timeout in seconds for each layout processing (default: None, no timeout)')
     
     return parser.parse_args()
 
@@ -160,6 +174,14 @@ async def run_script(script_name, script_label, backend, model, reasoning, args,
     if args.layouts:
         cmd.append('--layouts')
         cmd.extend(args.layouts)
+    
+    # Add base_url if provided
+    if args.base_url:
+        cmd.extend(['--base-url', args.base_url])
+    
+    # Add timeout if provided
+    if args.timeout:
+        cmd.extend(['--timeout', str(args.timeout)])
     
     # Add progress position for concurrent tqdm display
     cmd.extend(['--progress-position', str(position)])
@@ -279,6 +301,14 @@ def run_script_sync(script_name, script_label, backend, model, reasoning, args, 
         cmd.append('--layouts')
         cmd.extend(args.layouts)
     
+    # Add base_url if provided
+    if args.base_url:
+        cmd.extend(['--base-url', args.base_url])
+    
+    # Add timeout if provided
+    if args.timeout:
+        cmd.extend(['--timeout', str(args.timeout)])
+    
     # Progress position always 0 for sync mode (no concurrent display)
     cmd.extend(['--progress-position', '0'])
     
@@ -357,6 +387,10 @@ def main():
     print(f"  Reasoning: {args.reasoning if args.reasoning else 'None'}")
     print(f"  Execution Mode: {args.execution_mode}")
     print(f"  Output Folder: {output_folder}")
+    if args.base_url and args.backend == 'ollama':
+        print(f"  Ollama Base URL: {args.base_url}")
+    if args.timeout:
+        print(f"  Timeout: {args.timeout}s per layout")
     print(f"  Complexity Mode: {args.complexity_mode}")
     if args.complexity_mode != 'all':
         print(f"    Specific: {args.complexity}")

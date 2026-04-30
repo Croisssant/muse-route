@@ -6,6 +6,7 @@ import sys
 import io
 import argparse
 import logging
+import threading
 from dotenv import load_dotenv
 from openai import OpenAI
 from tqdm import tqdm
@@ -20,7 +21,7 @@ from prompts_utils import (load_image, exhibit_selection, prompt_model,
                            parse_route_and_save, 
                            discover_complexity_and_layouts, discover_config_files, 
                            build_paths, extract_scar_validations, extract_validation_fields,
-                            build_backend, prompt_model)
+                           build_backend, prompt_model, create_failure_final_results)
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
 if sys.platform == 'win32':
@@ -39,10 +40,16 @@ def parse_arguments():
         Examples:
 
         # Run with OpenAI (default)
-        python prompts_easy_semantic.py --backend openai --model gpt-5.4
+        python prompts_hard.py --backend openai --model gpt-5.4
         
         # Run with a local HuggingFace model
-        python prompts_easy_semantic.py --backend huggingface --model google/gemma-4-31B-it
+        python prompts_hard.py --backend huggingface --model google/gemma-4-31B-it
+        
+        # Run with Ollama
+        python prompts_hard.py --backend ollama --model qwen3.6
+        
+        # Run with Ollama on custom port/server
+        python prompts_hard.py --backend ollama --model qwen3.6 --base-url http://127.0.0.1:11435
 
         # Run with all defaults
         python prompts_hard.py
@@ -59,6 +66,12 @@ def parse_arguments():
         # Process specific layouts
         python prompts_hard.py --layout-mode list --layouts layout_01 layout_02
 
+        # Process specific tasks/config variants
+        python prompts_hard.py --tasks hard_01 hard_03
+
+        # Combine layout and task filtering
+        python prompts_hard.py --layout-mode list --layouts layout_15 layout_17 --tasks hard_01 hard_02
+
         # Customize validation fields
         python prompts_hard.py --svr-fields connectivity wall_crossings
         """
@@ -68,9 +81,11 @@ def parse_arguments():
     parser.add_argument('--backend', type=str, default='openai',
                     choices=['openai', 'huggingface', 'ollama'],
                     help='Model backend to use (default: openai)')
+    
+    parser.add_argument('--base-url', type=str, default='http://127.0.0.1:11434',
+                    help='Base URL for Ollama backend (default: http://127.0.0.1:11434)')
 
-
-    parser.add_argument('--svr-fields', nargs='+', 
+    parser.add_argument('--svr-fields', nargs='+',
                        default=['connectivity', 'wall_crossings', 'exhibit_collision', 'out_of_area_violations'],
                        help='SVR validation fields to include in final_results.json (default: connectivity wall_crossings exhibit_collision out_of_area_violations)')
     
@@ -113,6 +128,11 @@ def parse_arguments():
                        default=None,
                        help='Specific layout(s) when using single or list mode (default: None)')
     
+    # Task/config variant selection
+    parser.add_argument('--tasks', nargs='+', type=str,
+                       default=None,
+                       help='Specific task/config variant(s) to process (e.g., hard_01 hard_03). Filters after discovering configs. (default: None, process all)')
+    
     # Directory paths
     parser.add_argument('--floorplan-dir', type=str, default='floorplans',
                        help='Base directory for floorplans (default: floorplans)')
@@ -142,6 +162,10 @@ def parse_arguments():
     
     parser.add_argument('--progress-position', type=int, default=0,
                        help='Progress bar position for concurrent execution (default: 0)')
+    
+    # Timeout configuration
+    parser.add_argument('--timeout', type=int, default=None,
+                       help='Timeout in seconds for each layout processing (default: None, no timeout)')
     
     return parser.parse_args()
 
@@ -208,7 +232,7 @@ FILENAMES = {
     'annotations': ANNOTATIONS_FILENAME
 }
 
-BACKEND = build_backend(args.backend, args.model, args.reasoning)
+BACKEND = build_backend(args.backend, args.model, args.reasoning, base_url=args.base_url)
 
 # ========================================
 
@@ -237,6 +261,60 @@ def setup_layout_logger(log_file_path):
     logger.addHandler(file_handler)
     
     return logger
+
+
+def process_layout_with_timeout(layout_folder, config_variant, config_path, model_name, 
+                                  difficulty, complexity, timeout=None, pbar=None):
+    """Wrapper to process layout with optional timeout.
+    
+    Args:
+        timeout: Timeout in seconds (None = no timeout)
+        Other args: Same as process_layout()
+    
+    Returns:
+        bool: Success status
+    """
+    if timeout is None:
+        # No timeout, run directly
+        return process_layout(layout_folder, config_variant, config_path, 
+                             model_name, difficulty, complexity, pbar)
+    
+    # Run with timeout using threading
+    result = [None]
+    exception = [None]
+    
+    def target():
+        try:
+            result[0] = process_layout(layout_folder, config_variant, config_path,
+                                      model_name, difficulty, complexity, pbar)
+        except Exception as e:
+            exception[0] = e
+    
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    
+    if thread.is_alive():
+        # Timeout occurred
+        layout_name = layout_folder.name
+        print(f"✗ {complexity}/{layout_name} ({config_variant}): Timeout after {timeout}s")
+        
+        # Try to log to file if logger exists
+        try:
+            log_file = BASE_RESULTS_DIR / difficulty / complexity / f"{config_variant}_{layout_name}" / "processing.log"
+            if log_file.exists():
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(f"\n\nERROR: Processing timeout after {timeout} seconds\n")
+        except:
+            pass
+        
+        return False
+    
+    if exception[0]:
+        # Exception occurred in thread
+        raise exception[0]
+    
+    return result[0] if result[0] is not None else False
 
 
 def process_layout(layout_folder, config_variant, config_path, model_name, difficulty, complexity, pbar=None):
@@ -382,9 +460,22 @@ def process_layout(layout_folder, config_variant, config_path, model_name, diffi
             f.write("="*70 + "\n\n")
             f.write(user_prompt_selection)
 
-        text_output_selection = prompt_model(BACKEND, system_prompt_selection, user_prompt_selection, image_base64)
-        gpt_selected_exhibits = exhibit_selection(text_output_selection, exhibits_list)
-        # print(f"Selected exhibits: {gpt_selected_exhibits}")
+        try:
+            text_output_selection = prompt_model(BACKEND, system_prompt_selection, user_prompt_selection, image_base64)
+            gpt_selected_exhibits = exhibit_selection(text_output_selection, exhibits_list)
+            # print(f"Selected exhibits: {gpt_selected_exhibits}")
+        except ValueError as e:
+            error_msg = f"Failed to select exhibits: {e}"
+            logger.error(error_msg)
+            
+            # Create failure final_results.json
+            failure_data = create_failure_final_results(SVR_FIELDS, SCSR_FIELDS, SCAR_FIELDS)
+            with open(output_paths['final_json'], "w") as f:
+                json.dump(failure_data, f, indent=2)
+            
+            logger.info(f"Exhibit selection failed - failure results saved to: {output_paths['final_json']}")
+            print(f"✗ {complexity}/{layout_name} ({config_variant}): Exhibit selection failed")
+            return False
         
         # -------- Route Planning --------
         system_prompt_route = f"""
@@ -503,8 +594,21 @@ def process_layout(layout_folder, config_variant, config_path, model_name, diffi
 
         text_output_route = prompt_model(BACKEND, system_prompt_route, user_prompt_route, image_base64)
         
-        parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
-        logger.info(f"Route saved to: {output_paths['route_image']}")
+        try:
+            parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
+            logger.info(f"Route saved to: {output_paths['route_image']}")
+        except ValueError as e:
+            error_msg = f"Failed to parse route: {e}"
+            logger.error(error_msg)
+            
+            # Create failure final_results.json
+            failure_data = create_failure_final_results(SVR_FIELDS, SCSR_FIELDS, SCAR_FIELDS)
+            with open(output_paths['final_json'], "w") as f:
+                json.dump(failure_data, f, indent=2)
+            
+            logger.info(f"Empty/invalid route - failure results saved to: {output_paths['final_json']}")
+            print(f"✗ {complexity}/{layout_name} ({config_variant}): Empty route")
+            return False
         
         # -------- Route Validation --------
         if pbar:
@@ -639,6 +743,24 @@ def main():
         print(f"\n✗ No config files found to process")
         return
     
+    # Filter by specific tasks if --tasks argument is provided
+    if args.tasks:
+        print(f"\n🔍 Filtering by specific task(s): {args.tasks}")
+        filtered_combos = []
+        for complexity, layout_folder, config_variant, config_path in layout_config_combos:
+            # Check if config_variant matches any of the specified tasks
+            # Support both "hard_01" and "hard_01.json" formats
+            variant_name = config_variant.replace('.json', '')
+            if any(task == variant_name or task == config_variant for task in args.tasks):
+                filtered_combos.append((complexity, layout_folder, config_variant, config_path))
+        
+        if not filtered_combos:
+            print(f"✗ No configs match the specified tasks: {args.tasks}")
+            return
+        
+        layout_config_combos = filtered_combos
+        print(f"✓ Filtered to {len(layout_config_combos)} matching config(s)")
+    
     print(f"\n✓ Found {len(layout_config_combos)} config(s) to process:")
     for complexity, layout_folder, config_variant, _ in layout_config_combos:
         print(f"  - {complexity}/{layout_folder.name}/{config_variant}")
@@ -647,6 +769,10 @@ def main():
     
     # Process each layout+config combination with progress bar
     results = {}
+    
+    # Display timeout configuration if set
+    if args.timeout:
+        print(f"⏱️  Timeout: {args.timeout}s per layout\n")
     
     # Create progress bar (disable if --no-progress flag is set)
     disable_progress = args.no_progress
@@ -657,7 +783,9 @@ def main():
         
         for complexity, layout_folder, config_variant, config_path in pbar:
             key = f"{complexity}/{layout_folder.name}/{config_variant}"
-            success = process_layout(layout_folder, config_variant, config_path, MODEL, DIFFICULTY, complexity, pbar=pbar)
+            success = process_layout_with_timeout(layout_folder, config_variant, config_path, 
+                                                   MODEL, DIFFICULTY, complexity, 
+                                                   timeout=args.timeout, pbar=pbar)
             results[key] = "Success" if success else "Failed"
     
     # Summary
