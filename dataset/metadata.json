@@ -1,0 +1,162 @@
+{
+  "@context": "https://mlcommons.org/croissant/context.json",
+  "@type": "Dataset",
+
+  "name": "Cross-Cultural Historical Artifacts Collection",
+  "description": "A comprehensive dataset of historical artifacts spanning multiple civilizations, including Ancient Greek pottery, Mesopotamian antiquities, Tang Dynasty Chinese ceramics, Ancient Egyptian objects, and Japanese Kofun period artifacts. The dataset includes production dates, provenance information, materials, iconography, inscriptions, and detailed descriptive metadata for museum exhibits and research purposes.",
+  "creator": {
+    "@type": "Organization",
+    "name": "Muse-Route Project"
+  },
+  "version": "1.0",
+
+  "distribution": [
+    {
+      "@type": "DataDownload",
+      "contentUrl": "selected_exhibits_preprocessed.csv",
+      "encodingFormat": "text/csv"
+    }
+  ],
+
+  "recordSet": [
+    {
+      "@type": "RecordSet",
+      "name": "artifacts",
+      "description": "Each row represents a historical artifact from various museum collections, including Greek, Mesopotamian, Chinese, Egyptian, and Japanese cultural contexts.",
+
+      "field": [
+        {
+          "name": "id",
+          "dataType": "integer",
+          "description": "Unique artifact identifier from source museum catalog"
+        },
+
+        {
+          "name": "Production date",
+          "dataType": "string",
+          "description": "Human-readable production date range (e.g., '500BC-490BC (circa)', '618-906'). May include qualifiers like 'circa', 'probably', or 'mainly'. BCE dates shown with 'BC' suffix."
+        },
+        {
+          "name": "production_year_min",
+          "dataType": "number",
+          "description": "Earliest estimated production year (BCE as negative, CE as positive). Parsed from the Production date field."
+        },
+        {
+          "name": "production_year_max",
+          "dataType": "number",
+          "description": "Latest estimated production year (BCE as negative, CE as positive). Parsed from the Production date field."
+        },
+        {
+          "name": "is_date_range",
+          "dataType": "boolean",
+          "description": "Whether the date represents a range (true) or single year (false)"
+        },
+        {
+          "name": "date_parse_status",
+          "dataType": "string",
+          "description": "Parsing success status for production date. Values: 'success' (successfully parsed), 'failed' (could not parse), or 'partial' (partially parsed)"
+        },
+
+        {
+          "name": "Find spot",
+          "dataType": "string",
+          "description": "Original findspot or provenance description from museum records. May include qualifiers like 'Excavated/Findspot:', 'Found/Acquired:', or '(said to be from)'"
+        },
+        {
+          "name": "find_spot_city",
+          "dataType": "string",
+          "description": "Parsed city or site name from the findspot. May include historic site names (e.g., 'Vulci', 'Naukratis', 'Ur'). Can be null if location couldn't be parsed."
+        },
+        {
+          "name": "find_spot_country",
+          "dataType": "string",
+          "description": "Parsed modern country name from the findspot. Maps historic locations to current countries (e.g., 'Italy', 'Egypt', 'Iraq', 'Greece', 'China', 'Japan', 'Cyprus', 'Libya'). Can be null if location couldn't be parsed."
+        },
+        {
+          "name": "location_parse_status",
+          "dataType": "string",
+          "description": "Parsing status for location fields. Values: 'success' (successfully parsed city and country), 'failed' (could not parse), or 'partial' (only one field parsed)"
+        },
+
+        {
+          "name": "Materials",
+          "dataType": "string",
+          "description": "Primary material(s) used in the artifact's construction (e.g., 'pottery', 'stone', 'bronze', 'earthenware', 'stoneware', 'glazed composition', 'gold', 'cornelian', 'lapis lazuli'). May include compound materials separated by semicolons."
+        },
+        {
+          "name": "Technique",
+          "dataType": "string",
+          "description": "Artistic and manufacturing techniques used (e.g., 'painted', 'incised', 'glazed', 'carved', 'engraved', 'wheel-made', 'mould-made', 'inlaid', 'gilded'). Multiple techniques separated by semicolons. Can be null if not documented."
+        },
+
+        {
+          "name": "Inscription",
+          "dataType": "string",
+          "description": "Complete inscription metadata including type, position, language, script, transliteration, translation, and notes. Structured as 'Inscription type: [type] Inscription position: [position] Inscription language: [language] Inscription script: [script] Inscription transliteration: [text] Inscription translation: [text] Inscription note: [notes]'. Can be null if no inscription present."
+        },
+
+        {
+          "name": "Subjects",
+          "dataType": "string",
+          "description": "Iconographic subjects and themes depicted on the artifact (e.g., 'classical deity', 'warrior', 'horse-racing', 'mythical figure/creature', 'satyr', 'lotus', 'sphinx', 'bird', 'mammal'). Multiple subjects separated by semicolons. Can be null if not applicable."
+        },
+        {
+          "name": "Assoc name",
+          "dataType": "string",
+          "description": "Associated figures, deities, or individuals depicted or named in the artifact. Includes representations (e.g., 'Representation of: Athena/Minerva'), named inscriptions (e.g., 'Named in inscription: Amenhotep III'), or associations (e.g., 'Associated with: Lady Layard'). Can be null if none identified."
+        },
+
+        {
+          "name": "Culture",
+          "dataType": "string",
+          "description": "Cultural attribution or period classification (e.g., 'Attic', 'Archaic Greek', 'Neo-Assyrian', 'Tang dynasty', '26th Dynasty', 'Third Dynasty of Ur', 'Kofun Period', 'Late Minoan I'). May include multiple classifications separated by semicolons."
+        },
+        {
+          "name": "Section",
+          "dataType": "string",
+          "description": "Museum collection section or classification category (e.g., 'Greek', 'Mesopotamian', 'Tang dynasty', 'Ancient Egyptian', 'Japanese')"
+        },
+        {
+          "name": "Place",
+          "dataType": "string",
+          "description": "Broad geographical origin or cultural region (e.g., 'Greece', 'iraq', 'China', 'Egypt', 'Japan')"
+        },
+
+        {
+          "name": "description",
+          "dataType": "string",
+          "description": "Comprehensive artifact description including physical characteristics, iconographic analysis, historical context, artistic techniques, and cultural significance. Typically 150-400 words providing detailed scholarly interpretation."
+        }
+      ],
+
+      "dataQuality": {
+        "completeness": {
+          "description": "Dataset contains 150 artifacts with varying levels of completeness",
+          "missingValues": "Fields 'Inscription', 'Subjects', 'Assoc name', and 'Technique' may be null for artifacts without these features",
+          "parsingStatus": "Dates and locations have associated status fields indicating parsing success"
+        },
+        "preprocessing": {
+          "description": "Data has been preprocessed to extract structured information from museum records",
+          "steps": [
+            "Date parsing: Extract year ranges from textual date descriptions",
+            "Location parsing: Extract city and country from findspot descriptions",
+            "Date normalization: Convert BCE/BC dates to negative numbers, CE/AD dates to positive",
+            "Status tracking: Record parsing success/failure for quality control"
+          ]
+        },
+        "sources": "Data compiled from https://huggingface.co/datasets/MBZUAI/TimeTravel"
+      }
+    }
+  ],
+
+  "distribution_summary": {
+    "total_artifacts": 150,
+    "by_culture": {
+      "Mesopotamian": 30,
+      "Ancient Egyptian": 30,
+      "Japanese": 30,
+      "Ancient Greek": 30,
+      "Tang Dynasty Chinese": 30
+    }
+  }
+}
