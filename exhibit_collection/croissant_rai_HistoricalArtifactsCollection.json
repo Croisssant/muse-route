@@ -8,7 +8,7 @@
   },
   "@type": "Dataset",
   "name": "HistoricalArtifactsCollection",
-  "description": "A comprehensive dataset of historical artifacts spanning multiple civilizations, including Ancient Greek pottery, Mesopotamian antiquities, Tang Dynasty Chinese ceramics, Ancient Egyptian objects, and Japanese Kofun period artifacts. The dataset includes production dates, provenance information, materials, iconography, inscriptions, and detailed descriptive metadata for museum exhibits and research purposes.",
+  "description": "A benchmark dataset testing AI route planning in museum environments through multi-constraint satisfaction tasks. Features museum layouts (simple/complex) with 10 navigation tasks each (varying difficulty: easy spatial, easy semantic, medium, hard), integrated with historical artifacts metadata across 5 ancient civilizations (Greek, Mesopotamian, Tang Chinese, Egyptian, Japanese Kofun). Tasks evaluate spatial reasoning (layout navigation, collision avoidance) and semantic reasoning (exhibit selection by culture, materials, dates, techniques, iconography).",
   "creator": {
     "@type": "Organization",
     "name": "Muse-Route Project"
@@ -25,6 +25,41 @@
   ],
   "citation": "https://huggingface.co/datasets/MBZUAI/TimeTravel",
   "recordSet": [
+    {
+      "@type": "RecordSet",
+      "name": "layouts",
+      "description": "Each record corresponds to a layout with an image with 1 easy spatial, 1 easy semantic, 4 medium and 4 hard tasks described in JSON",
+      "field": [
+        {
+          "name": "layout_id",
+          "description": "Name of the layout folder"
+        },
+        {
+          "name": "layout_image",
+          "description": "Image of each layouts categorized by their complexity",
+          "dataType": "sc:ImageObject",
+          "source": {
+            "fileObject": {
+              "@type": "FileObject",
+              "contentUrl": "../floorplans/{layout_complexity}/{layout_id}/layout_{layout_id}.png",
+              "encodingFormat": "image/png"
+            }
+          }
+        },
+        {
+          "name": "task",
+          "description": "Task files with varying difficulties associated with their corresponding layout",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@type": "FileObject",
+              "contentUrl": "../floorplans/{layout_complexity}/{layout_id}/{task_difficulty}.json",
+              "encodingFormat": "application/json"
+            }
+          }
+        }
+      ]
+    },
     {
       "@type": "RecordSet",
       "name": "artifacts",
@@ -146,7 +181,8 @@
     }
   ],
   "distribution_summary": {
-    "total_artifacts": 150,
+    "total_artifacts": 2000,
+    "post_processed_artifacts": 150,
     "by_culture": {
       "Mesopotamian": 30,
       "Ancient Egyptian": 30,
