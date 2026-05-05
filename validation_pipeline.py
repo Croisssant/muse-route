@@ -115,7 +115,9 @@ def main():
         original_image_path=original_image_path,
         route_points=route_extraction_results.points,
         validation_result=validation_result,
-        output_path=validated_output_image_path
+        output_path=validated_output_image_path,
+        must_visit_exhibits=configs.get('specific_exhibit_to_cover', []),
+        show_all_zones=args.debug
     )
 
     violation_reasons = validation_result['validation_summary']['violation_reasons']

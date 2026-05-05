@@ -545,7 +545,7 @@ class SpatialValidator:
         
         return result
     
-    def visualize_validation(self, original_image_path, route_points, validation_result, output_path=None):
+    def visualize_validation(self, original_image_path, route_points, validation_result, output_path=None, must_visit_exhibits=None, show_all_zones=False):
         """
         Create annotated image showing validation results.
         
@@ -554,6 +554,8 @@ class SpatialValidator:
             route_points: List of route points
             validation_result: Validation result dictionary
             output_path: Path to save annotated image
+            must_visit_exhibits: List of exhibit IDs that are required to visit (from config's specific_exhibit_to_cover)
+            show_all_zones: If True, show all exhibit zones (debug mode). If False, only show visited and unvisited must-visit zones
         """
         print(f"\nCreating validation visualization...")
         
@@ -668,15 +670,15 @@ class SpatialValidator:
             sx, sy = int(endpoints['start'][0]), int(endpoints['start'][1])
             # Draw large green circle for START
             cv2.circle(img_cv, (sx, sy), radius=15, color=(0, 255, 0), thickness=-1)
-            # Draw white outline
-            cv2.circle(img_cv, (sx, sy), radius=17, color=(128, 128, 128), thickness=2)
+            # Draw black outline
+            cv2.circle(img_cv, (sx, sy), radius=17, color=(0, 0, 0), thickness=2)
         
         if endpoints['end']:
             ex, ey = int(endpoints['end'][0]), int(endpoints['end'][1])
             # Draw large red circle for END
             cv2.circle(img_cv, (ex, ey), radius=15, color=(0, 0, 255), thickness=-1)
-            # Draw white outline
-            cv2.circle(img_cv, (ex, ey), radius=17, color=(128, 128, 128), thickness=2)
+            # Draw black outline
+            cv2.circle(img_cv, (ex, ey), radius=17, color=(0, 0, 0), thickness=2)
         
         # Convert to PIL for drawing text and markers
         img = Image.fromarray(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
@@ -690,20 +692,44 @@ class SpatialValidator:
             font = ImageFont.load_default()
             font_small = ImageFont.load_default()
         
+        # Try to load bold font for START/END labels
+        try:
+            font_bold = ImageFont.truetype("arialbd.ttf", 20)  # Arial Bold, 20pt
+        except:
+            try:
+                font_bold = ImageFont.truetype("arial.ttf", 20)  # Fallback to regular Arial
+            except:
+                font_bold = ImageFont.load_default()  # Fallback to default
+        
         # Add labels for START and END
         if endpoints['start']:
             sx, sy = int(endpoints['start'][0]), int(endpoints['start'][1])
-            draw.text((sx + 20, sy - 10), "START", fill=(0, 255, 0), font=font)
+            draw.text((sx + 20, sy - 10), "START", fill=(0, 0, 0), font=font_bold)
         
         if endpoints['end']:
             ex, ey = int(endpoints['end'][0]), int(endpoints['end'][1])
-            draw.text((ex + 20, ey - 10), "END", fill=(255, 0, 0), font=font)
+            draw.text((ex + 20, ey - 10), "END", fill=(0, 0, 0), font=font_bold)
         
-        # Draw visit zones (proximity threshold circles) around all exhibits FIRST
-        print(f"  Drawing visit zones (radius + {self.proximity_threshold}px) around exhibits...")
+        # Draw visit zones (proximity threshold circles) around exhibits
+        # Behavior depends on show_all_zones flag (debug mode)
+        if show_all_zones:
+            print(f"  Drawing ALL visit zones (radius + {self.proximity_threshold}px) [DEBUG MODE]...")
+        else:
+            print(f"  Drawing selective visit zones (radius + {self.proximity_threshold}px) [NORMAL MODE]...")
+        
+        # Convert must_visit_exhibits to set for faster lookup, ensuring consistent types
+        must_visit_set = set()
+        if must_visit_exhibits:
+            for eid in must_visit_exhibits:
+                # Convert to string for consistent comparison with exhibit IDs
+                must_visit_set.add(str(eid) if not isinstance(eid, str) else eid)
+        
         for exhibit in self.exhibits:
             if exhibit['shape'] == 'circle':
                 exhibit_id = exhibit.get('exhibit_number', exhibit['id'])
+                # Ensure exhibit_id is string for comparison
+                exhibit_id_str = str(exhibit_id) if not isinstance(exhibit_id, str) else exhibit_id
+                
                 center = (int(exhibit['coordinates']['center_x']), 
                          int(exhibit['coordinates']['center_y']))
                 radius = exhibit['coordinates']['radius']
@@ -711,33 +737,56 @@ class SpatialValidator:
                 
                 # Determine if this exhibit was visited
                 was_visited = validation_result['exhibit_visits'][exhibit_id]['visited']
+                is_must_visit = exhibit_id_str in must_visit_set
                 
-                if was_visited:
-                    # Draw yellow/green visit zone for visited exhibits
-                    draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
-                                center[0]+visit_zone_radius, center[1]+visit_zone_radius],
-                               outline=(200, 200, 0), width=2)  # Yellow outline
+                if show_all_zones:
+                    # DEBUG MODE: Show all zones (current behavior)
+                    if was_visited:
+                        # Draw yellow/green visit zone for visited exhibits
+                        draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
+                                    center[0]+visit_zone_radius, center[1]+visit_zone_radius],
+                                   outline=(200, 200, 0), width=2)  # Yellow outline
+                    else:
+                        # Draw gray visit zone for unvisited exhibits
+                        draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
+                                    center[0]+visit_zone_radius, center[1]+visit_zone_radius],
+                                   outline=(150, 150, 150), width=1)  # Gray outline
                 else:
-                    # Draw gray visit zone for unvisited exhibits
-                    draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
-                                center[0]+visit_zone_radius, center[1]+visit_zone_radius],
-                               outline=(150, 150, 150), width=1)  # Gray outline
+                    # NORMAL MODE: Only show visited and unvisited must-visit zones
+                    if was_visited:
+                        # Draw yellow/green visit zone for visited exhibits
+                        draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
+                                    center[0]+visit_zone_radius, center[1]+visit_zone_radius],
+                                   outline=(200, 200, 0), width=2)  # Yellow outline
+                    elif is_must_visit:
+                        # Draw RED visit zone for unvisited must-visit exhibits
+                        draw.ellipse([center[0]-visit_zone_radius, center[1]-visit_zone_radius,
+                                    center[0]+visit_zone_radius, center[1]+visit_zone_radius],
+                                   outline=(255, 0, 0), width=3)  # RED outline with thicker border
+                    # else: Skip drawing zone for other unvisited exhibits
         
-        # Highlight visited exhibits
+        # Highlight visited exhibits and unvisited must-visit exhibits
         for exhibit in self.exhibits:
             if exhibit['shape'] == 'circle':
                 exhibit_id = exhibit.get('exhibit_number', exhibit['id'])
+                exhibit_id_str = str(exhibit_id) if not isinstance(exhibit_id, str) else exhibit_id
                 center = (exhibit['coordinates']['center_x'], 
                          exhibit['coordinates']['center_y'])
                 radius = exhibit['coordinates']['radius']
                 
-                if validation_result['exhibit_visits'][exhibit_id]['visited']:
-                    # Draw yellow highlight for visited
+                was_visited = validation_result['exhibit_visits'][exhibit_id]['visited']
+                is_must_visit = exhibit_id_str in must_visit_set
+                
+                if was_visited:
+                    # Draw yellow highlight for visited exhibits
                     draw.ellipse([center[0]-radius-5, center[1]-radius-5,
                                 center[0]+radius+5, center[1]+radius+5],
                                outline=(255, 255, 0), width=3)
-                    draw.text((center[0]+radius+10, center[1]), f"✓ {exhibit_id}", 
-                             fill=(0, 200, 0), font=font)
+                elif not show_all_zones and is_must_visit:
+                    # Draw RED highlight for unvisited must-visit exhibits (only in normal mode)
+                    draw.ellipse([center[0]-radius-5, center[1]-radius-5,
+                                center[0]+radius+5, center[1]+radius+5],
+                               outline=(255, 0, 0), width=3)
         
         # Add legend with color-coded route explanations
         legend_x, legend_y = 20, 20
@@ -780,6 +829,12 @@ class SpatialValidator:
         y_offset += 20
         draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], outline=(200, 200, 0), width=2)
         draw.text((legend_x+15, y_offset), "= Exhibit visited", fill=(0, 0, 0), font=font_small)
+        
+        # Add red zone legend entry in normal mode
+        if not show_all_zones and must_visit_exhibits and len(must_visit_exhibits) > 0:
+            y_offset += 20
+            draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], outline=(255, 0, 0), width=3)
+            draw.text((legend_x+15, y_offset), "= Missed must-visit exhibit", fill=(0, 0, 0), font=font_small)
         
         # Save
         if output_path:
