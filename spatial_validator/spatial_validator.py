@@ -642,11 +642,11 @@ class SpatialValidator:
                         color = (0, 165, 255)  # Orange for floor area violations
                         violation_counts['floor_area'] += 1
                     else:
-                        color = (0, 255, 0)  # Green (shouldn't happen)
+                        color = (0, 128, 0)  # Deep green for better contrast (shouldn't happen)
                         violation_counts['valid'] += 1
                 else:
-                    # No violations - green
-                    color = (0, 255, 0)  # Green in BGR
+                    # No violations - deep green for high contrast with entrance
+                    color = (0, 128, 0)  # Deep green in BGR
                     violation_counts['valid'] += 1
                 
                 # Draw point with determined color
@@ -788,6 +788,72 @@ class SpatialValidator:
                                 center[0]+radius+5, center[1]+radius+5],
                                outline=(255, 0, 0), width=3)
         
+        # Highlight unvisited must-see galleries with overlay and label
+        gallery_visits = validation_result['validation_summary']['gallery_visits']
+        
+        # Create a semi-transparent overlay for galleries
+        overlay = Image.new('RGBA', img.size, (255, 255, 255, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        
+        for gallery in self.galleries:
+            if gallery['shape'] == 'rectangle':
+                gallery_name = gallery.get('gallery_name', gallery.get('id', 'unknown'))
+                gallery_type = self.gallery_configs.get(gallery_name, 'normal')
+                
+                # Check if this is a must-see gallery that was NOT visited
+                if gallery_type == 'must_see' and not gallery_visits.get(gallery_name, False):
+                    coords = gallery['coordinates']
+                    x, y = coords['x'], coords['y']
+                    width, height = coords['width'], coords['height']
+                    
+                    # Draw semi-transparent red overlay
+                    overlay_draw.rectangle(
+                        [(x, y), (x + width, y + height)],
+                        fill=(255, 100, 100, 80),  # Semi-transparent red
+                        outline=(220, 50, 50, 255),  # Solid red border
+                        width=3
+                    )
+                    
+                    # Calculate center X position for text
+                    center_x = x + width // 2
+                    
+                    # Prepare text - only "NOT VISITED"
+                    text = "NOT VISITED"
+                    
+                    # Draw text with background for better visibility
+                    # Use bold font if available
+                    try:
+                        text_font = ImageFont.truetype("arialbd.ttf", 16)
+                    except:
+                        try:
+                            text_font = ImageFont.truetype("arial.ttf", 16)
+                        except:
+                            text_font = font
+                    
+                    # Get text bounding box
+                    bbox = overlay_draw.textbbox((0, 0), text, font=text_font)
+                    text_width = bbox[2] - bbox[0]
+                    text_height = bbox[3] - bbox[1]
+                    
+                    # Position text above the bounding box
+                    text_pos = (center_x - text_width // 2, y - text_height - 10)
+                    
+                    # Draw text with black outline for visibility
+                    for offset_x, offset_y in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                        overlay_draw.text(
+                            (text_pos[0] + offset_x, text_pos[1] + offset_y),
+                            text, fill=(0, 0, 0, 255), font=text_font
+                        )
+                    
+                    # Draw main text in white
+                    overlay_draw.text(text_pos, text, fill=(255, 255, 255, 255), font=text_font)
+        
+        # Composite the overlay with the main image
+        img = img.convert('RGBA')
+        img = Image.alpha_composite(img, overlay)
+        img = img.convert('RGB')
+        draw = ImageDraw.Draw(img)
+        
         # Add legend with color-coded route explanations
         legend_x, legend_y = 20, 20
         is_valid = validation_result['validation_summary']['is_valid']
@@ -803,7 +869,7 @@ class SpatialValidator:
         
         # Route color legend
         y_offset = legend_y + 70
-        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(0, 255, 0))
+        draw.ellipse([legend_x, y_offset, legend_x+10, y_offset+10], fill=(0, 128, 0))
         draw.text((legend_x+15, y_offset), "= Valid route point", fill=(0, 0, 0), font=font_small)
         
         y_offset += 20
