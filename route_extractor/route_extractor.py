@@ -558,7 +558,7 @@ class RouteExtractor:
 
         return skel
 
-    def _find_route_endpoints(self, final_mask, connectivity, debug=False, prune_iter=7):
+    def _find_route_endpoints(self, final_mask, connectivity, debug=False, prune_iter=5):
         result = {'start': None, 'end': None}
 
         if debug:
@@ -1177,45 +1177,11 @@ class RouteExtractor:
                     cv2.inRange(hsv_aligned,
                                 color_result['lo2'], color_result['hi2']))
 
-            # ── Post-processing: remove noise with morphological opening ──
-            # This removes small isolated pixels that might have been picked up
-            # due to color noise or compression artifacts
-            kernel_clean = np.ones((2, 2), np.uint8)
-            color_mask = cv2.morphologyEx(color_mask, cv2.MORPH_OPEN, 
-                                         kernel_clean, iterations=1)
-            
-            # ── Keep only significant connected components ────────────────
-            # Remove tiny fragments that are likely noise
-            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-                color_mask, connectivity=8)
-            
-            if num_labels > 1:  # 0 is background
-                # Calculate minimum size threshold (0.5% of largest component)
-                areas = [stats[i, cv2.CC_STAT_AREA] for i in range(1, num_labels)]
-                if areas:
-                    max_area = max(areas)
-                    min_area = max(10, int(max_area * 0.005))  # at least 10 pixels or 0.5% of largest
-                    
-                    # Create clean mask keeping only significant components
-                    clean_mask = np.zeros_like(color_mask)
-                    kept_components = 0
-                    for i in range(1, num_labels):
-                        if stats[i, cv2.CC_STAT_AREA] >= min_area:
-                            clean_mask[labels == i] = 255
-                            kept_components += 1
-                    
-                    if kept_components > 0:
-                        removed = num_labels - 1 - kept_components
-                        if removed > 0:
-                            print(f"    ↳ Removed {removed} small noise component(s), "
-                                  f"kept {kept_components} significant region(s)")
-                        color_mask = clean_mask
-
             # No subtraction needed: _sample_route_color already verified
             # that this colour is rare/absent in the original image, so every
             # pixel that matches the colour is genuine route.
             n_color = cv2.countNonZero(color_mask)
-            print(f"    Color-based mask pixels (after cleaning): {n_color}")
+            print(f"    Color-based mask pixels: {n_color}")
             return color_mask, True
 
         # No distinctive colour found — fall back to the diff-based mask.

@@ -1,0 +1,227 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "@language": "en",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "sc": "https://schema.org/"
+  },
+  "@type": "Dataset",
+  "name": "HistoricalArtifactsCollection",
+  "description": "A benchmark dataset testing AI route planning in museum environments through multi-constraint satisfaction tasks. Features museum layouts (simple/complex) with 10 navigation tasks each (varying difficulty: easy spatial, easy semantic, medium, hard), integrated with historical artifacts metadata across 5 ancient civilizations (Greek, Mesopotamian, Tang Chinese, Egyptian, Japanese Kofun). Tasks evaluate spatial reasoning (layout navigation, collision avoidance) and semantic reasoning (exhibit selection by culture, materials, dates, techniques, iconography).",
+  "creator": {
+    "@type": "Organization",
+    "name": "Muse-Route Project"
+  },
+  "version": "1.0",
+  "distribution": [
+    {
+      "@type": "https://schema.org/FileObject",
+      "name": "selected_exhibits_preprocessed.csv",
+      "contentUrl": "selected_exhibits_preprocessed.csv",
+      "encodingFormat": "text/csv",
+      "sha256": "F08E7534EF6E475C3273F391C5ABAB300F19DCCE86AC94136FAF670FAB09AA13"
+    }
+  ],
+  "citation": "https://huggingface.co/datasets/MBZUAI/TimeTravel",
+  "recordSet": [
+    {
+      "@type": "RecordSet",
+      "name": "layouts",
+      "description": "Each record corresponds to a layout with an image with 1 easy spatial, 1 easy semantic, 4 medium and 4 hard tasks described in JSON",
+      "field": [
+        {
+          "name": "layout_id",
+          "description": "Name of the layout folder"
+        },
+        {
+          "name": "layout_image",
+          "description": "Image of each layouts categorized by their complexity",
+          "dataType": "sc:ImageObject",
+          "source": {
+            "fileObject": {
+              "@type": "FileObject",
+              "contentUrl": "../floorplans/{layout_complexity}/{layout_id}/layout_{layout_id}.png",
+              "encodingFormat": "image/png"
+            }
+          }
+        },
+        {
+          "name": "task",
+          "description": "Task files with varying difficulties associated with their corresponding layout",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": {
+              "@type": "FileObject",
+              "contentUrl": "../floorplans/{layout_complexity}/{layout_id}/{task_difficulty}.json",
+              "encodingFormat": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "@type": "RecordSet",
+      "name": "artifacts",
+      "description": "Each row represents a historical artifact from various museum collections, including Greek, Mesopotamian, Chinese, Egyptian, and Japanese cultural contexts.",
+      "field": [
+        {
+          "name": "id",
+          "dataType": "integer",
+          "description": "Unique artifact identifier from source museum catalog"
+        },
+        {
+          "name": "Production date",
+          "dataType": "string",
+          "description": "Human-readable production date range (e.g., '500BC-490BC (circa)', '618-906'). May include qualifiers like 'circa', 'probably', or 'mainly'. BCE dates shown with 'BC' suffix."
+        },
+        {
+          "name": "production_year_min",
+          "dataType": "number",
+          "description": "Earliest estimated production year (BCE as negative, CE as positive). Parsed from the Production date field."
+        },
+        {
+          "name": "production_year_max",
+          "dataType": "number",
+          "description": "Latest estimated production year (BCE as negative, CE as positive). Parsed from the Production date field."
+        },
+        {
+          "name": "is_date_range",
+          "dataType": "boolean",
+          "description": "Whether the date represents a range (true) or single year (false)"
+        },
+        {
+          "name": "date_parse_status",
+          "dataType": "string",
+          "description": "Parsing success status for production date. Values: 'success' (successfully parsed), 'failed' (could not parse), or 'partial' (partially parsed)"
+        },
+        {
+          "name": "Find spot",
+          "dataType": "string",
+          "description": "Original findspot or provenance description from museum records. May include qualifiers like 'Excavated/Findspot:', 'Found/Acquired:', or '(said to be from)'"
+        },
+        {
+          "name": "find_spot_city",
+          "dataType": "string",
+          "description": "Parsed city or site name from the findspot. May include historic site names (e.g., 'Vulci', 'Naukratis', 'Ur'). Can be null if location couldn't be parsed."
+        },
+        {
+          "name": "find_spot_country",
+          "dataType": "string",
+          "description": "Parsed modern country name from the findspot. Maps historic locations to current countries (e.g., 'Italy', 'Egypt', 'Iraq', 'Greece', 'China', 'Japan', 'Cyprus', 'Libya'). Can be null if location couldn't be parsed."
+        },
+        {
+          "name": "location_parse_status",
+          "dataType": "string",
+          "description": "Parsing status for location fields. Values: 'success' (successfully parsed city and country), 'failed' (could not parse), or 'partial' (only one field parsed)"
+        },
+        {
+          "name": "Materials",
+          "dataType": "string",
+          "description": "Primary material(s) used in the artifact's construction (e.g., 'pottery', 'stone', 'bronze', 'earthenware', 'stoneware', 'glazed composition', 'gold', 'cornelian', 'lapis lazuli'). May include compound materials separated by semicolons."
+        },
+        {
+          "name": "Technique",
+          "dataType": "string",
+          "description": "Artistic and manufacturing techniques used (e.g., 'painted', 'incised', 'glazed', 'carved', 'engraved', 'wheel-made', 'mould-made', 'inlaid', 'gilded'). Multiple techniques separated by semicolons. Can be null if not documented."
+        },
+        {
+          "name": "Inscription",
+          "dataType": "string",
+          "description": "Complete inscription metadata including type, position, language, script, transliteration, translation, and notes. Structured as 'Inscription type: [type] Inscription position: [position] Inscription language: [language] Inscription script: [script] Inscription transliteration: [text] Inscription translation: [text] Inscription note: [notes]'. Can be null if no inscription present."
+        },
+        {
+          "name": "Subjects",
+          "dataType": "string",
+          "description": "Iconographic subjects and themes depicted on the artifact (e.g., 'classical deity', 'warrior', 'horse-racing', 'mythical figure/creature', 'satyr', 'lotus', 'sphinx', 'bird', 'mammal'). Multiple subjects separated by semicolons. Can be null if not applicable."
+        },
+        {
+          "name": "Assoc name",
+          "dataType": "string",
+          "description": "Associated figures, deities, or individuals depicted or named in the artifact. Includes representations (e.g., 'Representation of: Athena/Minerva'), named inscriptions (e.g., 'Named in inscription: Amenhotep III'), or associations (e.g., 'Associated with: Lady Layard'). Can be null if none identified."
+        },
+        {
+          "name": "Culture",
+          "dataType": "string",
+          "description": "Cultural attribution or period classification (e.g., 'Attic', 'Archaic Greek', 'Neo-Assyrian', 'Tang dynasty', '26th Dynasty', 'Third Dynasty of Ur', 'Kofun Period', 'Late Minoan I'). May include multiple classifications separated by semicolons."
+        },
+        {
+          "name": "Section",
+          "dataType": "string",
+          "description": "Museum collection section or classification category (e.g., 'Greek', 'Mesopotamian', 'Tang dynasty', 'Ancient Egyptian', 'Japanese')"
+        },
+        {
+          "name": "Place",
+          "dataType": "string",
+          "description": "Broad geographical origin or cultural region (e.g., 'Greece', 'iraq', 'China', 'Egypt', 'Japan')"
+        },
+        {
+          "name": "description",
+          "dataType": "string",
+          "description": "Comprehensive artifact description including physical characteristics, iconographic analysis, historical context, artistic techniques, and cultural significance. Typically 150-400 words providing detailed scholarly interpretation."
+        }
+      ],
+      "dataQuality": {
+        "completeness": {
+          "description": "Dataset contains 150 artifacts with varying levels of completeness",
+          "missingValues": "Fields 'Inscription', 'Subjects', 'Assoc name', and 'Technique' may be null for artifacts without these features",
+          "parsingStatus": "Dates and locations have associated status fields indicating parsing success"
+        },
+        "preprocessing": {
+          "description": "Data has been preprocessed to extract structured information from museum records",
+          "steps": [
+            "Date parsing: Extract year ranges from textual date descriptions",
+            "Location parsing: Extract city and country from findspot descriptions",
+            "Date normalization: Convert BCE/BC dates to negative numbers, CE/AD dates to positive",
+            "Status tracking: Record parsing success/failure for quality control"
+          ]
+        },
+        "sources": "Data compiled from https://huggingface.co/datasets/MBZUAI/TimeTravel"
+      }
+    }
+  ],
+  "distribution_summary": {
+    "total_artifacts": 2000,
+    "post_processed_artifacts": 150,
+    "by_culture": {
+      "Mesopotamian": 30,
+      "Ancient Egyptian": 30,
+      "Japanese": 30,
+      "Ancient Greek": 30,
+      "Tang Dynasty Chinese": 30
+    }
+  },
+  "rai:dataLimitations": "The dataset contains 150 historical artifacts with significant distributional constraints: it represents only 5 specific cultures (Mesopotamian, Ancient Egyptian, Japanese Kofun, Ancient Greek, Tang Dynasty Chinese) with an artificial 30-artifacts-per-culture balance that doesn't reflect actual historical distributions. Geographic coverage is severely limited to Mediterranean, Middle East, and East Asia, completely excluding the Americas, sub-Saharan Africa, Southeast Asia, and Oceania. The dataset exhibits strong preservation and collection biases toward durable materials (pottery, stone, metal) and elite/ceremonial objects while underrepresenting everyday utilitarian items and perishable materials. This dataset is NOT recommended for comprehensive cultural representation, statistical inference about global artifact populations, socioeconomic diversity studies, AI training for general artifact identification, or educational use as a sole source of world cultural heritage. It is appropriate for its intended use case of museum route planning, spatial navigation systems, and testing multi-attribute query algorithms within the specific represented cultures.",
+  "rai:dataBiases": "The dataset exhibits multiple systematic biases. Selection bias is pervasive, the dataset exclusively represents museum-collected artifacts from 5 ancient civilizations (Mesopotamian, Ancient Egyptian, Greek, Tang Chinese, Japanese Kofun), artificially balanced at exactly 30 artifacts each, which creates an unrealistic distribution that may cause models to overweight these specific cultures and time periods. The dataset also has preservation bias where it heavily favors durable materials (pottery, stone, metal, glazed ceramics) over perishable materials (textiles, wood, paper), which may lead models to under-recognize or misclassify organic artifacts. Additionally, class bias is evident in the over-representation of ceremonial and funerary objects (royal seals, tomb goods, religious votives) versus everyday utilitarian items, which may cause models to associate historical artifacts primarily with upper-class contexts.",
+  "rai:personalSensitiveInformation": "This dataset does not contain personal or sensitive information about living individuals.",
+  "rai:dataUseCases": "This dataset represents museum exhibit navigation and route planning with multi-constraint satisfaction, measuring an AI system's ability to generate valid museum tour routes that simultaneously satisfy spatial constraints (connectivity, collision avoidance), semantic constraints (exhibit selection based on cultural attributes, materials, dates, techniques), and user preferences (start/end locations, must-visit regions, exhibit coverage requirements)",
+  "rai:dataSocialImpact": "This dataset has positive potential for enhancing museum accessibility and visitor experiences through AI-powered route planning, while also serving as a technical benchmark for spatial-semantic reasoning systems. However, significant fairness concerns arise from its severe geographic and cultural limitations: by exclusively representing five ancient Eurasian civilizations while completely excluding the Americas, sub-Saharan Africa, Oceania, and most of Asia, the dataset perpetuates colonial-era collection patterns and creates systems that systematically erase underrepresented cultures from computational representation. The over-representation of ceremonial objects versus everyday artifacts further reinforces narratives that privilege rulers and religious figures over ordinary people. Primary misuse risks include deployment in educational contexts as representative of \"world history,\" use in commercial museum applications without disclosure of limitations, and training of general-purpose cultural heritage AI systems that would embed these biases into broader applications. Currently, no explicit mitigations are documented such as usage restrictions, warning labels, or prohibited use cases. Recommended mitigations include adding explicit usage warnings about cultural limitations to dataset documentation, requiring acknowledgment of geographic biases before access, providing guidance on appropriate contextualization for deployed systems, and recommending combination with datasets representing underrepresented cultures to prevent systematic underservice of non-Eurasian heritage.",
+  "rai:hasSyntheticData": false,
+  "prov:wasDerivedFrom": [
+    {
+      "@id": "https://huggingface.co/datasets/MBZUAI/TimeTravel",
+      "prov:label": "Mohamed Bin Zayed University of Artificial Intelligence",
+      "sc:license": "MIT License"
+    }
+  ],
+  "prov:wasGeneratedBy": [
+    {
+      "@type": "prov:Activity",
+      "prov:type": {
+        "@id": "https://www.wikidata.org/wiki/Q1172378"
+      },
+      "prov:label": "Data Filtering",
+      "sc:description": "- Removed artifacts with null values in required fields (Production date, Find spot, Materials, Technique)\n\n- Filtered out artifacts with non-numeric production dates (e.g., rejected century formats like \"1stC(mid)\" but retained \"500BC-490BC\")\n\n- Selected top 5 sections by artifact count: Greek, Mesopotamian, Tang Dynasty, Ancient Egyptian, Japanese\n\n- Randomly sampled 30 exhibits per section (configurable, default 20) to achieve balanced representation\n\n- Used pandas sampling with optional random seed for reproducibility"
+    },
+    {
+      "@type": "prov:Activity",
+      "prov:type": {
+        "@id": "https://www.wikidata.org/wiki/Q5227332"
+      },
+      "prov:label": "Data Preprocessing",
+      "sc:description": "- Parsed textual production dates into structured numeric ranges\n\n- Converted BC dates to negative numbers, AD/CE dates to positive\n\n- Extracted min/max years from ranges (e.g., \"500BC-490BC\" → -500 to -490)\n\n- Handled qualifiers like \"circa\", \"probably\", \"about\" by removing parentheticals\n\n- Added fields: production_year_min, production_year_max, is_date_range, date_parse_status\n\n- Regex-based pattern matching for date extraction\n\n- Extracted city names from findspot strings (e.g., \"Excavated/Findspot: Vulci (said to be)\" → \"Vulci\")\n\n- Mapped historic city names to modern countries using hardcoded dictionary (126 city-country mappings)\n\n- Added fields: find_spot_city, find_spot_country, location_parse_status\n\n- Generated reports on unknown cities requiring manual review"
+    }
+  ],
+  "url": "https://huggingface.co/datasets/MBZUAI/TimeTravel",
+  "license": "MIT"
+}
