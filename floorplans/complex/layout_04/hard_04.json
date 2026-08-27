@@ -32,22 +32,22 @@
     },
     "material_constraint": {
       "materials": [
+        "bronze",
         "earthenware",
-        "chalcedony",
-        "copper"
+        "chalcedony"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
         "Japan",
-        "Iraq"
+        "Iraq",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "carved"
+        "perforated",
+        "wheel-cut; hand-modelled; drilled"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "egyptian blue"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Cyprus"
         ]
       },
       "technique_constraint": {

@@ -19,12 +19,12 @@
       ]
     },
     "material_constraint": {
-      "materials": []
+      "materials": [
+        "egyptian blue"
+      ]
     },
     "find_spot_constraint": {
-      "locations": [
-        "Greece"
-      ]
+      "locations": []
     },
     "technique_constraint": {
       "techniques": []

@@ -24,14 +24,14 @@
     },
     "material_constraint": {
       "materials": [
-        "gold",
-        "stone"
+        "bronze",
+        "copper"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Iraq",
-        "Egypt"
+        "Japan",
+        "Italy"
       ]
     },
     "technique_constraint": {

@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
+        "limestone",
         "chalcedony",
-        "lapis lazuli",
-        "shell"
+        "lapis lazuli"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
-        "Iraq",
-        "Italy"
+        "Italy",
+        "Egypt",
+        "Greece"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "gilded"
+        "incised; glazed",
+        "ash-glazed; pierced; incised"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stone"
+          "aragonite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Egypt"
+          "Italy"
         ]
       },
       "technique_constraint": {

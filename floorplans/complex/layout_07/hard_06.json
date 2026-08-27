@@ -1,0 +1,73 @@
+{
+  "_gallery_config_options": {
+    "must_see": "Must vist route",
+    "restricted": "Route cannot enter",
+    "normal": "No restrictions"
+  },
+  "gallery_configs": {
+    "gallery_room_1": "must_see",
+    "gallery_room_2": "must_see"
+  },
+  "distance_budget_in_mm": 2500000,
+  "exhibit_see_distance_in_mm": 1500,
+  "exhibit_categories_to_cover": [
+    "Greek",
+    "Mesopotamian"
+  ],
+  "at_least_n_exhibits_to_cover": 21,
+  "specific_exhibit_to_cover": [
+    30,
+    47,
+    51,
+    59,
+    15
+  ],
+  "exhibit_attribute_constraints": {
+    "_comment": "Individual constraints work independently (OR logic between them)",
+    "date_constraint": {
+      "in_range": [
+        "250",
+        "600"
+      ]
+    },
+    "material_constraint": {
+      "materials": [
+        "bronze",
+        "chalcedony",
+        "lapis lazuli"
+      ]
+    },
+    "find_spot_constraint": {
+      "locations": [
+        "Greece",
+        "Cyprus",
+        "Iraq"
+      ]
+    },
+    "technique_constraint": {
+      "techniques": [
+        "pierced",
+        "perforated"
+      ]
+    },
+    "combined_constraint": {
+      "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",
+      "date_constraint": {
+        "in_range": []
+      },
+      "material_constraint": {
+        "materials": [
+          "agate"
+        ]
+      },
+      "find_spot_constraint": {
+        "locations": [
+          "Greece"
+        ]
+      },
+      "technique_constraint": {
+        "techniques": []
+      }
+    }
+  }
+}

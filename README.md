@@ -36,8 +36,8 @@ Each layout directory contains:
 ├── layout_annotations.json          # Spatial annotations (walls, galleries, exhibits)
 ├── easy_spatial.json                # Easy spatial task config
 ├── easy_semantic.json               # Easy semantic task config
-├── medium_01.json ... _04.json      # 4 medium task configs
-├── hard_01.json ... _04.json        # 4 hard task configs
+├── medium_01.json ... _11.json      # 11 medium task configs
+├── hard_01.json ... _11.json        # 11 hard task configs
 ├── exhibits.csv                      # Layout-specific exhibit metadata
 ├── exhibit_list.json                # Exhibit descriptions
 ├── exhibit_visualization.png         # Visual exhibit distribution map

@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
         "Japan",
-        "Iraq"
+        "Iraq",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "mould-made; incised; pierced"
+        "ash-glazed; pierced",
+        "slipped; painted"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stoneware"
+          "quartz"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Iraq"
+          "Japan"
         ]
       },
       "technique_constraint": {

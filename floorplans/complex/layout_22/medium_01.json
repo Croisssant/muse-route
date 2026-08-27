@@ -24,14 +24,14 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "glazed composition"
+        "stoneware",
+        "gold"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Iraq",
-        "Egypt"
+        "Cyprus",
+        "Iraq"
       ]
     },
     "technique_constraint": {

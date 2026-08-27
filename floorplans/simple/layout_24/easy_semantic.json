@@ -16,15 +16,15 @@
       "in_range": []
     },
     "material_constraint": {
-      "materials": []
+      "materials": [
+        "lacquer"
+      ]
     },
     "find_spot_constraint": {
       "locations": []
     },
     "technique_constraint": {
-      "techniques": [
-        "lacquered"
-      ]
+      "techniques": []
     },
     "combined_constraint": {
       "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",

@@ -13,18 +13,15 @@
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
-      "in_range": [
-        "618",
-        "906"
-      ]
+      "in_range": []
     },
     "material_constraint": {
-      "materials": []
+      "materials": [
+        "metal"
+      ]
     },
     "find_spot_constraint": {
-      "locations": [
-        "Libya"
-      ]
+      "locations": []
     },
     "technique_constraint": {
       "techniques": []

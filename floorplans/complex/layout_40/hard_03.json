@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Greece",
-        "Cyprus",
-        "China"
+        "Egypt",
+        "Iraq",
+        "Japan"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "carved",
-        "mould-made; incised; pierced"
+        "pierced",
+        "perforated"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stoneware"
+          "aragonite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Japan"
+          "Cyprus"
         ]
       },
       "technique_constraint": {

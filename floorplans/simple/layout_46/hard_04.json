@@ -31,9 +31,9 @@
     },
     "material_constraint": {
       "materials": [
+        "copper",
         "silver",
-        "metal",
-        "porcelain"
+        "metal"
       ]
     },
     "find_spot_constraint": {
@@ -45,8 +45,8 @@
     },
     "technique_constraint": {
       "techniques": [
-        "glazed",
-        "gilded"
+        "ash-glazed; pierced; incised",
+        "carved"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "bronze"
+          "gold"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Egypt"
+          "Greece"
         ]
       },
       "technique_constraint": {

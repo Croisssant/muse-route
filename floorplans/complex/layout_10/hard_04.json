@@ -10,8 +10,8 @@
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Tang dynasty",
-    "Greek"
+    "Ancient Egyptian",
+    "Tang dynasty"
   ],
   "at_least_n_exhibits_to_cover": 24,
   "specific_exhibit_to_cover": [
@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
+        "gypsum",
         "stone",
-        "limestone",
-        "gold"
+        "limestone"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "China",
         "Iraq",
-        "Egypt"
+        "Egypt",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "carved",
-        "slipped; painted"
+        "engraved",
+        "incised"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stoneware"
+          "aragonite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Libya"
         ]
       },
       "technique_constraint": {

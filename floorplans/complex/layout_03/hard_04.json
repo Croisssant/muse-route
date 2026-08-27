@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "glazed composition",
-        "earthenware"
+        "gold",
+        "egyptian blue",
+        "metal"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "China",
-        "Italy"
+        "Italy",
+        "Greece",
+        "Cyprus"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "mould-made; incised; pierced",
-        "slipped; painted"
+        "mould-made (likely); glazed",
+        "incised; mould-made; pierced"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stoneware"
+          "pottery"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Greece"
+          "Italy"
         ]
       },
       "technique_constraint": {

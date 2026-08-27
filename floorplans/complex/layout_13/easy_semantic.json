@@ -19,12 +19,12 @@
       "materials": []
     },
     "find_spot_constraint": {
-      "locations": []
+      "locations": [
+        "Cyprus"
+      ]
     },
     "technique_constraint": {
-      "techniques": [
-        "marbled; glazed"
-      ]
+      "techniques": []
     },
     "combined_constraint": {
       "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",

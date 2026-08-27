@@ -13,10 +13,7 @@
   "exhibit_attribute_constraints": {
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
-      "in_range": [
-        "600 BC",
-        "570 BC"
-      ]
+      "in_range": []
     },
     "material_constraint": {
       "materials": []

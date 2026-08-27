@@ -24,14 +24,14 @@
     },
     "material_constraint": {
       "materials": [
-        "stone",
-        "chalcedony"
+        "lapis lazuli",
+        "limestone"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "Greece"
+        "Italy",
+        "Egypt"
       ]
     },
     "technique_constraint": {

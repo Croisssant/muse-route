@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
-        "gold",
         "stone",
-        "bronze"
+        "bronze",
+        "copper"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Iraq",
-        "Egypt",
-        "Greece"
+        "Libya",
+        "Japan",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "ash-glazed"
+        "pierced",
+        "perforated"
       ]
     },
     "combined_constraint": {
@@ -61,7 +61,7 @@
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Greece"
         ]
       },
       "technique_constraint": {

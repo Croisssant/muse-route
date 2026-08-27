@@ -10,8 +10,8 @@
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Mesopotamian",
-    "Greek"
+    "Japanese",
+    "Mesopotamian"
   ],
   "at_least_n_exhibits_to_cover": 17,
   "specific_exhibit_to_cover": [
@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Iraq",
         "Japan",
-        "Italy"
+        "Italy",
+        "Egypt"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "gilded"
+        "perforated",
+        "wheel-cut; hand-modelled; drilled"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "copper alloy"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Japan"
         ]
       },
       "technique_constraint": {

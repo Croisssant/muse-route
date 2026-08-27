@@ -31,9 +31,9 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "steatite",
-        "stone"
+        "stone",
+        "limestone",
+        "chalcedony"
       ]
     },
     "find_spot_constraint": {
@@ -45,8 +45,8 @@
     },
     "technique_constraint": {
       "techniques": [
-        "painted; incised",
-        "painted"
+        "wheel-cut; hand-modelled; drilled",
+        "engraved"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "pottery"
+          "cornelian"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Iraq"
+          "Egypt"
         ]
       },
       "technique_constraint": {

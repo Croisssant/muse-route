@@ -25,14 +25,14 @@
     },
     "material_constraint": {
       "materials": [
-        "gold",
-        "steatite"
+        "bronze",
+        "limestone"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "Greece"
+        "Italy",
+        "Egypt"
       ]
     },
     "technique_constraint": {

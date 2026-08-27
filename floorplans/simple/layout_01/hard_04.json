@@ -32,9 +32,9 @@
     },
     "material_constraint": {
       "materials": [
+        "stone",
         "bronze",
-        "limestone",
-        "egyptian blue"
+        "limestone"
       ]
     },
     "find_spot_constraint": {
@@ -46,8 +46,8 @@
     },
     "technique_constraint": {
       "techniques": [
-        "mould-made; incised; pierced",
-        "carved"
+        "incised",
+        "silvered; incised"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "metal"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "China"
         ]
       },
       "technique_constraint": {

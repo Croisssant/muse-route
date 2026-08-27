@@ -19,12 +19,12 @@
       ]
     },
     "material_constraint": {
-      "materials": [
-        "silver"
-      ]
+      "materials": []
     },
     "find_spot_constraint": {
-      "locations": []
+      "locations": [
+        "Greece"
+      ]
     },
     "technique_constraint": {
       "techniques": []

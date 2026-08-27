@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Greece",
-        "Cyprus",
-        "Libya"
+        "China",
+        "Iraq",
+        "Egypt"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "carved"
+        "wheel-cut; hand-modelled; drilled",
+        "engraved"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "glazed composition"
+          "copper alloy"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Egypt"
+          "Cyprus"
         ]
       },
       "technique_constraint": {

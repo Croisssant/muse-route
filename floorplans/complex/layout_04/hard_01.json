@@ -32,22 +32,22 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "glazed composition",
-        "stoneware"
+        "stoneware",
+        "gold",
+        "stone"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "Japan",
-        "Iraq"
+        "Greece",
+        "Cyprus",
+        "Egypt"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted; incised",
-        "painted"
+        "silvered; incised",
+        "painted; wheel-made; incised"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "pottery"
+          "quartz"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Egypt"
+          "Italy"
         ]
       },
       "technique_constraint": {

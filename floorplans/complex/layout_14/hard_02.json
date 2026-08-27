@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
-        "gold",
         "stone",
-        "bronze"
+        "bronze",
+        "chalcedony"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Italy",
-        "Egypt",
-        "Greece"
+        "Japan",
+        "Iraq",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "ash-glazed"
+        "silvered; incised",
+        "ash-glazed; pierced"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stoneware"
+          "gypsum"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Iraq"
+          "Japan"
         ]
       },
       "technique_constraint": {

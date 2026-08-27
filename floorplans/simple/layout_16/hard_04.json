@@ -10,8 +10,8 @@
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Greek",
-    "Mesopotamian"
+    "Tang dynasty",
+    "Greek"
   ],
   "at_least_n_exhibits_to_cover": 23,
   "specific_exhibit_to_cover": [
@@ -31,9 +31,9 @@
     },
     "material_constraint": {
       "materials": [
+        "steatite",
         "gypsum",
-        "limestone",
-        "bronze"
+        "limestone"
       ]
     },
     "find_spot_constraint": {
@@ -45,8 +45,8 @@
     },
     "technique_constraint": {
       "techniques": [
-        "carved",
-        "gilded"
+        "perforated",
+        "wheel-cut; hand-modelled; drilled"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "aragonite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "China"
+          "Egypt"
         ]
       },
       "technique_constraint": {

@@ -7,6 +7,7 @@ Checks both:
 """
 
 import os
+import glob
 import json
 from pathlib import Path
 from collections import defaultdict
@@ -19,40 +20,44 @@ def discover_expected_tasks(floorplans_dir='floorplans'):
     Returns a dictionary mapping (complexity, layout) -> [task_files]
     """
     expected_tasks = defaultdict(list)
-    
-    # Task file to difficulty mapping
-    task_to_difficulty = {
+
+    # Fixed single-file tasks, plus glob patterns for however many
+    # medium/hard variations exist per layout (count is not hardcoded here -
+    # generate_config_files.py controls how many get generated).
+    static_task_files = {
         'easy_semantic.json': 'easy_semantic',
         'easy_spatial.json': 'easy_spatial',
-        'medium_01.json': 'medium',
-        'medium_02.json': 'medium',
-        'medium_03.json': 'medium',
-        'medium_04.json': 'medium',
-        'hard_01.json': 'hard',
-        'hard_02.json': 'hard',
-        'hard_03.json': 'hard',
-        'hard_04.json': 'hard',
     }
-    
+    dynamic_patterns = [
+        ('medium_*.json', 'medium'),
+        ('hard_*.json', 'hard'),
+    ]
+
     # Walk through the floorplans directory
     for complexity in ['simple', 'complex']:
         complexity_path = os.path.join(floorplans_dir, complexity)
         if not os.path.exists(complexity_path):
             continue
-            
+
         for layout in sorted(os.listdir(complexity_path)):
             layout_path = os.path.join(complexity_path, layout)
             if not os.path.isdir(layout_path):
                 continue
-                
-            # Check which task files exist for this layout
-            for task_file, difficulty in task_to_difficulty.items():
+
+            # Check which static task files exist for this layout
+            for task_file, difficulty in static_task_files.items():
                 task_path = os.path.join(layout_path, task_file)
                 if os.path.exists(task_path):
-                    # Store the expected combination
                     key = (complexity, layout, difficulty, task_file)
                     expected_tasks[key] = task_path
-    
+
+            # Discover however many medium/hard variations actually exist
+            for pattern, difficulty in dynamic_patterns:
+                for task_path in sorted(glob.glob(os.path.join(layout_path, pattern))):
+                    task_file = os.path.basename(task_path)
+                    key = (complexity, layout, difficulty, task_file)
+                    expected_tasks[key] = task_path
+
     return expected_tasks
 
 

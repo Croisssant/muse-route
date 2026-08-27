@@ -1,0 +1,72 @@
+{
+  "_gallery_config_options": {
+    "must_see": "Must vist route",
+    "restricted": "Route cannot enter",
+    "normal": "No restrictions"
+  },
+  "gallery_configs": {
+    "gallery_01": "must_see"
+  },
+  "distance_budget_in_mm": 2500000,
+  "exhibit_see_distance_in_mm": 1500,
+  "exhibit_categories_to_cover": [
+    "Mesopotamian",
+    "Greek"
+  ],
+  "at_least_n_exhibits_to_cover": 24,
+  "specific_exhibit_to_cover": [
+    23,
+    22,
+    39,
+    3,
+    35
+  ],
+  "exhibit_attribute_constraints": {
+    "_comment": "Individual constraints work independently (OR logic between them)",
+    "date_constraint": {
+      "in_range": [
+        "6000 BC",
+        "5000 BC"
+      ]
+    },
+    "material_constraint": {
+      "materials": [
+        "quartz",
+        "copper alloy",
+        "aragonite"
+      ]
+    },
+    "find_spot_constraint": {
+      "locations": [
+        "Italy",
+        "Egypt",
+        "Greece"
+      ]
+    },
+    "technique_constraint": {
+      "techniques": [
+        "pierced; engraved",
+        "pierced; incised; drilled"
+      ]
+    },
+    "combined_constraint": {
+      "_combined_comment": "Combined constraint uses AND logic - exhibit must match ALL specified conditions",
+      "date_constraint": {
+        "in_range": []
+      },
+      "material_constraint": {
+        "materials": [
+          "stoneware"
+        ]
+      },
+      "find_spot_constraint": {
+        "locations": [
+          "Italy"
+        ]
+      },
+      "technique_constraint": {
+        "techniques": []
+      }
+    }
+  }
+}

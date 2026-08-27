@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
         "Iraq",
-        "Japan"
+        "Japan",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "carved",
-        "mould-made; incised; pierced"
+        "mould-made (probably)",
+        "painted; wheel-made; incised"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stoneware"
+          "chlorite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Japan"
+          "Iraq"
         ]
       },
       "technique_constraint": {

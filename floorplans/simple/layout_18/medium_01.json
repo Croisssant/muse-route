@@ -24,8 +24,8 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "chalcedony"
+        "gold",
+        "lapis lazuli"
       ]
     },
     "find_spot_constraint": {

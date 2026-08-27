@@ -39,15 +39,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "Greece",
-        "Cyprus"
+        "Japan",
+        "Iraq",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "painted"
+        "incised",
+        "kakime"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "quartz"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Greece"
         ]
       },
       "technique_constraint": {

@@ -24,14 +24,14 @@
     },
     "material_constraint": {
       "materials": [
-        "glazed composition",
-        "earthenware"
+        "stoneware",
+        "porcelain"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "China",
-        "Italy"
+        "Egypt",
+        "China"
       ]
     },
     "technique_constraint": {

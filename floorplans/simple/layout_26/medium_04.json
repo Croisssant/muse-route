@@ -24,14 +24,14 @@
     },
     "material_constraint": {
       "materials": [
-        "gold",
-        "stone"
+        "bronze",
+        "chalcedony"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Italy",
-        "Greece"
+        "Japan",
+        "Italy"
       ]
     },
     "technique_constraint": {

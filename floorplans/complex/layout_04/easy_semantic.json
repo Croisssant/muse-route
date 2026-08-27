@@ -19,12 +19,12 @@
       ]
     },
     "material_constraint": {
-      "materials": []
+      "materials": [
+        "metal"
+      ]
     },
     "find_spot_constraint": {
-      "locations": [
-        "Cyprus"
-      ]
+      "locations": []
     },
     "technique_constraint": {
       "techniques": []

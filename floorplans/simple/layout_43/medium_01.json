@@ -25,14 +25,14 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "stoneware"
+        "gold",
+        "bronze"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
-        "Italy"
+        "Cyprus",
+        "Libya"
       ]
     },
     "technique_constraint": {

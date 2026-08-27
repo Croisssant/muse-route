@@ -39,15 +39,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Greece",
-        "Cyprus",
-        "Libya"
+        "Iraq",
+        "Egypt",
+        "Japan"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "carved",
-        "ash-glazed"
+        "drilled",
+        "incised; perforated"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "glazed composition"
+          "lacquer"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Japan"
+          "Cyprus"
         ]
       },
       "technique_constraint": {

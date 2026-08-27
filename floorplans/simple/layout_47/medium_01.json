@@ -24,8 +24,8 @@
     },
     "material_constraint": {
       "materials": [
-        "stoneware",
-        "pottery"
+        "bronze",
+        "gold"
       ]
     },
     "find_spot_constraint": {

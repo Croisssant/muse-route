@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
         "Italy",
-        "Egypt"
+        "Egypt",
+        "Greece"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "gilded"
+        "carved",
+        "ash-glazed; tataki"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "bronze"
+          "lacquer"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Egypt"
+          "Italy"
         ]
       },
       "technique_constraint": {

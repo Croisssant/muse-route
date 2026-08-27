@@ -24,8 +24,8 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "steatite"
+        "stone",
+        "limestone"
       ]
     },
     "find_spot_constraint": {

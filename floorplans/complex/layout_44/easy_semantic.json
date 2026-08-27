@@ -14,17 +14,17 @@
     "_comment": "Individual constraints work independently (OR logic between them)",
     "date_constraint": {
       "in_range": [
-        "664 BC",
-        "510 BC"
+        "610 BC",
+        "570 BC"
       ]
     },
     "material_constraint": {
-      "materials": [
-        "marble"
-      ]
+      "materials": []
     },
     "find_spot_constraint": {
-      "locations": []
+      "locations": [
+        "Libya"
+      ]
     },
     "technique_constraint": {
       "techniques": []

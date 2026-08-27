@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "Greece",
-        "Cyprus"
+        "Libya",
+        "Iraq",
+        "Japan"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "carved"
+        "pierced",
+        "perforated"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "earthenware"
+          "copper alloy"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "China"
         ]
       },
       "technique_constraint": {

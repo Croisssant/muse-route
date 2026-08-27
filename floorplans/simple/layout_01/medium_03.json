@@ -25,14 +25,14 @@
     },
     "material_constraint": {
       "materials": [
-        "stoneware",
-        "gold"
+        "earthenware",
+        "stone"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Iraq",
-        "Italy"
+        "Libya",
+        "Egypt"
       ]
     },
     "technique_constraint": {

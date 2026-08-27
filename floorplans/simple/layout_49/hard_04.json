@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
-        "pottery",
-        "stoneware",
-        "bronze"
+        "copper",
+        "silver",
+        "pottery"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
-        "Egypt",
-        "Italy"
+        "Cyprus",
+        "Greece",
+        "Japan"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "slipped; painted"
+        "ash-glazed; tataki",
+        "painted; incised"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "bronze"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Cyprus"
+          "Japan"
         ]
       },
       "technique_constraint": {

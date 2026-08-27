@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
-        "stoneware",
         "gold",
-        "stone"
+        "stone",
+        "bronze"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
-        "Italy",
-        "Greece"
+        "Egypt",
+        "Iraq",
+        "Japan"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "mould-made; incised; pierced"
+        "wheel-cut; hand-modelled; drilled",
+        "drilled"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "pottery"
+          "shell"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Iraq"
+          "Egypt"
         ]
       },
       "technique_constraint": {

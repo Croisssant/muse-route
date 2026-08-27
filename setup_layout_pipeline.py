@@ -256,17 +256,17 @@ Pipeline Steps:
   2. Visualize exhibits by section on layout image
   3. Generate difficulty-specific config files
   
-Generated Files (13 total):
+Generated Files (27 total):
   Exhibit Files:
     • exhibits.csv
     • exhibit_list.json
     • exhibit_visualization.png
-  
+
   Config Files:
     • easy_spatial.json
     • easy_semantic.json
-    • medium_01.json, medium_02.json, medium_03.json, medium_04.json
-    • hard_01.json, hard_02.json, hard_03.json, hard_04.json
+    • medium_01.json ... medium_11.json
+    • hard_01.json ... hard_11.json
         """
     )
     

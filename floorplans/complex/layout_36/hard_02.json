@@ -32,22 +32,22 @@
     },
     "material_constraint": {
       "materials": [
-        "glazed composition",
         "stone",
-        "gold"
+        "gold",
+        "gypsum"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
-        "Italy",
-        "Greece"
+        "Libya",
+        "Iraq",
+        "Egypt"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "carved"
+        "glazed",
+        "drilled"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stoneware"
+          "shell"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Egypt"
+          "Greece"
         ]
       },
       "technique_constraint": {

@@ -25,14 +25,14 @@
     },
     "material_constraint": {
       "materials": [
-        "glazed composition",
-        "stoneware"
+        "gold",
+        "earthenware"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
-        "Iraq"
+        "Cyprus",
+        "Libya"
       ]
     },
     "technique_constraint": {

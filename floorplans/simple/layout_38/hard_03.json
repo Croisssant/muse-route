@@ -10,8 +10,8 @@
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Japanese",
-    "Mesopotamian"
+    "Greek",
+    "Japanese"
   ],
   "at_least_n_exhibits_to_cover": 17,
   "specific_exhibit_to_cover": [
@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
         "Iraq",
-        "Italy"
+        "Italy",
+        "Egypt"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "carved",
-        "painted"
+        "drilled",
+        "incised; perforated"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "stone"
+          "quartz"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Iraq"
         ]
       },
       "technique_constraint": {

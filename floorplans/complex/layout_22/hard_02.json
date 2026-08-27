@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
-        "stoneware",
         "gold",
-        "stone"
+        "stone",
+        "steatite"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Japan",
-        "Italy",
-        "Greece"
+        "Iraq",
+        "Egypt",
+        "Japan"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted",
-        "carved"
+        "silvered; incised",
+        "incised; perforated"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "glazed composition"
+          "chlorite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Egypt"
+          "Iraq"
         ]
       },
       "technique_constraint": {

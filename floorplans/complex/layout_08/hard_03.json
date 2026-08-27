@@ -39,15 +39,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "Greece",
-        "Cyprus"
+        "Iraq",
+        "Japan",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "glazed",
-        "carved"
+        "perforated",
+        "wheel-cut; hand-modelled; drilled"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "aragonite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Greece"
         ]
       },
       "technique_constraint": {

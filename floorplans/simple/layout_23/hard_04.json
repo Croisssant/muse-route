@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
+        "gold",
         "lapis lazuli",
-        "gypsum",
-        "shell"
+        "gypsum"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Iraq",
-        "Italy",
-        "Egypt"
+        "Greece",
+        "Cyprus",
+        "Iraq"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "slipped; painted",
-        "drilled"
+        "incised",
+        "carved; drilled (eye sockets)"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "limestone"
+          "pottery"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Greece"
+          "Iraq"
         ]
       },
       "technique_constraint": {

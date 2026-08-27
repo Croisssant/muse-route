@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
-        "glazed composition",
         "stoneware",
-        "steatite"
+        "steatite",
+        "gypsum"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
-        "Italy",
-        "Greece"
+        "Libya",
+        "China",
+        "Iraq"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "painted; incised",
-        "painted"
+        "perforated",
+        "wheel-cut; hand-modelled; drilled"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "earthenware"
+          "quartz"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Iraq"
+          "Greece"
         ]
       },
       "technique_constraint": {

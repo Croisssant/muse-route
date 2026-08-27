@@ -10,8 +10,8 @@
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Greek",
-    "Japanese"
+    "Tang dynasty",
+    "Greek"
   ],
   "at_least_n_exhibits_to_cover": 17,
   "specific_exhibit_to_cover": [
@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Greece",
-        "Cyprus",
-        "Iraq"
+        "Libya",
+        "Japan",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "glazed"
+        "incised; glazed",
+        "ash-glazed; pierced; incised"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "earthenware"
+          "bronze"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "China"
+          "Egypt"
         ]
       },
       "technique_constraint": {

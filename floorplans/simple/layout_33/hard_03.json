@@ -38,15 +38,15 @@
     },
     "find_spot_constraint": {
       "locations": [
-        "Greece",
-        "Cyprus",
-        "Libya"
+        "Japan",
+        "Egypt",
+        "Iraq"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "ash-glazed",
-        "mould-made; incised; pierced"
+        "glazed",
+        "painted; wheel-made; incised"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "glazed composition"
+          "lapis lazuli"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Iraq"
+          "Cyprus"
         ]
       },
       "technique_constraint": {

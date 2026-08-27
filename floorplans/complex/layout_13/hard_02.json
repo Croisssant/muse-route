@@ -32,22 +32,22 @@
     },
     "material_constraint": {
       "materials": [
-        "gold",
         "earthenware",
-        "stone"
+        "stone",
+        "bronze"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Italy",
-        "China",
-        "Egypt"
+        "Cyprus",
+        "Japan",
+        "Iraq"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "glazed",
-        "ash-glazed"
+        "drilled",
+        "incised"
       ]
     },
     "combined_constraint": {
@@ -57,12 +57,12 @@
       },
       "material_constraint": {
         "materials": [
-          "pottery"
+          "chlorite"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Iraq"
+          "Egypt"
         ]
       },
       "technique_constraint": {

@@ -10,8 +10,8 @@
   "distance_budget_in_mm": 2500000,
   "exhibit_see_distance_in_mm": 1500,
   "exhibit_categories_to_cover": [
-    "Ancient Egyptian",
-    "Greek"
+    "Mesopotamian",
+    "Ancient Egyptian"
   ],
   "at_least_n_exhibits_to_cover": 27,
   "specific_exhibit_to_cover": [
@@ -31,22 +31,22 @@
     },
     "material_constraint": {
       "materials": [
+        "bronze",
         "limestone",
-        "steatite",
-        "chalcedony"
+        "steatite"
       ]
     },
     "find_spot_constraint": {
       "locations": [
-        "Egypt",
         "Japan",
-        "Iraq"
+        "Iraq",
+        "Italy"
       ]
     },
     "technique_constraint": {
       "techniques": [
-        "glazed",
-        "carved"
+        "incised",
+        "slipped; painted"
       ]
     },
     "combined_constraint": {
@@ -56,12 +56,12 @@
       },
       "material_constraint": {
         "materials": [
-          "gold"
+          "gypsum"
         ]
       },
       "find_spot_constraint": {
         "locations": [
-          "Italy"
+          "Libya"
         ]
       },
       "technique_constraint": {

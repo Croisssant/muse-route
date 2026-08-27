@@ -165,7 +165,7 @@ class CompletePipelineRunner:
             print()
             print(f"📁 Layout Directory: {self.layout_dir}")
             print()
-            print("📄 All Generated Files (15 total):")
+            print("📄 All Generated Files (29 total):")
             print()
             print("   Annotation Files:")
             
@@ -296,21 +296,21 @@ Required Input Files:
   • exhibit_input.txt
   • selected_exhibits_preprocessed.csv (global)
 
-Generated Files (15 total):
+Generated Files (29 total):
   Annotations:
     • layout_annotations.json
     • annotated_layout.png
-  
+
   Exhibits:
     • exhibits.csv
     • exhibit_list.json
     • exhibit_visualization.png
-  
+
   Configs:
     • easy_spatial.json
     • easy_semantic.json
-    • medium_01.json, medium_02.json, medium_03.json, medium_04.json
-    • hard_01.json, hard_02.json, hard_03.json, hard_04.json
+    • medium_01.json ... medium_11.json
+    • hard_01.json ... hard_11.json
         """
     )
     
