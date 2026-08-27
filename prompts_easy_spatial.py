@@ -6,6 +6,7 @@ import sys
 import io
 import argparse
 import logging
+import threading
 
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -17,7 +18,8 @@ from prompts_utils import (load_image, prompt_model,
                            parse_route_and_save,
                            discover_complexity_and_layouts, build_paths,
                            extract_scar_validations, extract_validation_fields,
-                           build_backend)
+                           build_backend, create_failure_final_results,
+                           save_response_record)
  
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
@@ -45,6 +47,9 @@ def parse_arguments():
         # Run with Ollama
         python prompts_easy_spatial.py --backend ollama --model qwen3.6
         
+        # Run with Ollama on custom port/server
+        python prompts_easy_spatial.py --backend ollama --model qwen3.6 --base-url http://127.0.0.1:11435
+        
         # Override model and difficulty
         python prompts_easy_spatial.py --model gpt-4 --difficulty easy_semantic
         
@@ -65,6 +70,9 @@ def parse_arguments():
     parser.add_argument('--backend', type=str, default='openai',
                     choices=['openai', 'huggingface', 'ollama'],
                     help='Model backend to use (default: openai)')
+    
+    parser.add_argument('--base-url', type=str, default='http://127.0.0.1:11434',
+                    help='Base URL for Ollama backend (default: http://127.0.0.1:11434)')
 
     # Validation fields
     parser.add_argument('--svr-fields', nargs='+', 
@@ -140,6 +148,10 @@ def parse_arguments():
     parser.add_argument('--progress-position', type=int, default=0,
                        help='Progress bar position for concurrent execution (default: 0)')
     
+    # Timeout configuration
+    parser.add_argument('--timeout', type=int, default=None,
+                       help='Timeout in seconds for each layout processing (default: None, no timeout)')
+    
     return parser.parse_args()
 
 
@@ -203,7 +215,7 @@ FILENAMES = {
     'annotations': ANNOTATIONS_FILENAME
 }
 
-BACKEND = build_backend(args.backend, args.model, args.reasoning)
+BACKEND = build_backend(args.backend, args.model, args.reasoning, base_url=args.base_url)
 
 # ========================================
 
@@ -227,6 +239,58 @@ def setup_layout_logger(log_file_path):
     logger.addHandler(file_handler)
     
     return logger
+
+
+def process_layout_with_timeout(layout_folder, model_name, difficulty, complexity, 
+                                  timeout=None, pbar=None):
+    """Wrapper to process layout with optional timeout.
+    
+    Args:
+        timeout: Timeout in seconds (None = no timeout)
+        Other args: Same as process_layout()
+    
+    Returns:
+        bool: Success status
+    """
+    if timeout is None:
+        # No timeout, run directly
+        return process_layout(layout_folder, model_name, difficulty, complexity, pbar)
+    
+    # Run with timeout using threading
+    result = [None]
+    exception = [None]
+    
+    def target():
+        try:
+            result[0] = process_layout(layout_folder, model_name, difficulty, complexity, pbar)
+        except Exception as e:
+            exception[0] = e
+    
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    
+    if thread.is_alive():
+        # Timeout occurred
+        layout_name = layout_folder.name
+        print(f"✗ {complexity}/{layout_name}: Timeout after {timeout}s")
+        
+        # Try to log to file if logger exists
+        try:
+            log_file = BASE_RESULTS_DIR / difficulty / complexity / layout_name / "processing.log"
+            if log_file.exists():
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(f"\n\nERROR: Processing timeout after {timeout} seconds\n")
+        except:
+            pass
+        
+        return False
+    
+    if exception[0]:
+        # Exception occurred in thread
+        raise exception[0]
+    
+    return result[0] if result[0] is not None else False
 
 
 def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None):
@@ -400,10 +464,30 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             f.write("="*70 + "\n\n")
             f.write(user_prompt_route)
 
-        text_output_route = prompt_model(BACKEND, system_prompt_route, user_prompt_route, image_base64)
+        text_output_route, response = prompt_model(BACKEND, system_prompt_route, user_prompt_route, image_base64)
+        save_response_record(
+            model_name=model_name,
+            difficulty=difficulty,
+            complexity=complexity,
+            layout_name=layout_name,
+            response_obj=response
+        )
         
-        parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
-        logger.info(f"Route saved to: {output_paths['route_image']}")
+        try:
+            parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
+            logger.info(f"Route saved to: {output_paths['route_image']}")
+        except ValueError as e:
+            error_msg = f"Failed to parse route: {e}"
+            logger.error(error_msg)
+            
+            # Create failure final_results.json
+            failure_data = create_failure_final_results(SVR_FIELDS, SCSR_FIELDS, SCAR_FIELDS)
+            with open(output_paths['final_json'], "w") as f:
+                json.dump(failure_data, f, indent=2)
+            
+            logger.info(f"Empty/invalid route - failure results saved to: {output_paths['final_json']}")
+            print(f"✗ {complexity}/{layout_name}: Empty route")
+            return False
         
         # -------- Route Validation --------
         if pbar:
@@ -529,6 +613,10 @@ def main():
     # Process each layout with progress bar
     results = {}
     
+    # Display timeout configuration if set
+    if args.timeout:
+        print(f"⏱️  Timeout: {args.timeout}s per layout\n")
+    
     # Create progress bar (disable if --no-progress flag is set)
     disable_progress = args.no_progress
     with tqdm(complexity_layouts, desc="[Spatial] Processing layouts", 
@@ -538,7 +626,8 @@ def main():
         
         for complexity, layout_folder in pbar:
             key = f"{complexity}/{layout_folder.name}"
-            success = process_layout(layout_folder, MODEL, DIFFICULTY, complexity, pbar=pbar)
+            success = process_layout_with_timeout(layout_folder, MODEL, DIFFICULTY, complexity, 
+                                                   timeout=args.timeout, pbar=pbar)
             results[key] = "Success" if success else "Failed"
     
     # Summary

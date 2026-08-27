@@ -16,3 +16,13 @@ __pycache__/
 
 # Ignore dataset
 exhibits_construction_helpers/data/
+
+# Ignore results
+/results
+/results_old
+metrics_summary.png
+metrics_summary.tex
+missing_final_results.json
+Modelfile
+openai_response_record.json
+missing_final_results-checkpoint.json
