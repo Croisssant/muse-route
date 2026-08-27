@@ -55,8 +55,25 @@ def main():
                             '(default: 3; increase to 5-8 for larger dimension gaps)')
     parser.add_argument('--marker-size',          type=int, default=15)
     parser.add_argument('--debug', action='store_true', help='Enable debugging displays (disabled by default)')
+    parser.add_argument('--skip-alignment', action='store_true',
+                        help='Skip homography alignment. Only safe when the route image '
+                             'was drawn directly onto an unmodified copy of the original '
+                             'image (same dimensions, same coordinate space).')
+    parser.add_argument('--route-coordinates-file', default=None,
+                        help='Path to a JSON file containing the original source route '
+                             'coordinates (e.g. the VLM output route) as a list of [x, y] '
+                             'pairs. When provided, computes a geometric_fidelity score '
+                             'comparing the extracted skeleton against this route and '
+                             'stores it in validation_summary.')
+    parser.add_argument('--fidelity-tolerance-px', type=int, default=3,
+                        help='Pixel tolerance used for the geometric_fidelity similarity '
+                             'percentage (default: 3, roughly half the drawn line width).')
 
     args = parser.parse_args()
+
+    source_coordinates = None
+    if args.route_coordinates_file:
+        source_coordinates = load_json(args.route_coordinates_file)
 
     # Process image directories and filenames
     annotations_path = args.annotations
@@ -91,7 +108,10 @@ def main():
         marker_size=args.marker_size,
         difference_threshold=args.difference_threshold,
         tolerance_px=args.tolerance,
-        debug=args.debug
+        debug=args.debug,
+        skip_alignment=args.skip_alignment,
+        source_coordinates=source_coordinates,
+        fidelity_tolerance_px=args.fidelity_tolerance_px
     )
     
 
@@ -138,6 +158,7 @@ def main():
     validation_result['validation_summary']['connectivity'] = route_extraction_results.connectivity
     validation_result['validation_summary']['svr'] = svr
     validation_result['validation_summary']['scsr'] = scsr
+    validation_result['validation_summary']['geometric_fidelity'] = route_extraction_results.geometric_fidelity
     
     # Semantic Validation
     print("\n" + "="*70)

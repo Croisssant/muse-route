@@ -406,6 +406,8 @@ def parse_route_and_save(input_image_path, output_image_path, text_output_route)
     image.save(output_image_path)
     print(f"Route drawn and saved to {output_image_path}")
 
+    return route
+
 
 def discover_complexity_and_layouts(base_dir, complexity_mode, specific_complexities,
                                     layout_mode, specific_layouts):
@@ -623,7 +625,8 @@ def build_paths(layout_folder, model_name, difficulty, complexity,
         'extracted_image': output_dir / f"extracted_{sanitized_model_name}_route.png",
         'validated_image': output_dir / f"validated_{sanitized_model_name}_route.png",
         'validation_json': output_dir / "validation_results.json",
-        'final_json': output_dir / "final_results.json"
+        'final_json': output_dir / "final_results.json",
+        'route_coordinates': output_dir / "route_coordinates.json"
     }
     
     return input_paths, output_paths

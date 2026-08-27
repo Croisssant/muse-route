@@ -18,8 +18,7 @@ __pycache__/
 exhibits_construction_helpers/data/
 
 # Ignore results
-/results
-/results_old
+/results*/
 metrics_summary.png
 metrics_summary.tex
 missing_final_results.json

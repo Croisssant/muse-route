@@ -571,7 +571,9 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
         )
         
         try:
-            parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
+            route = parse_route_and_save(input_paths['image'], output_paths['route_image'], text_output_route)
+            with open(output_paths['route_coordinates'], "w") as f:
+                json.dump(route, f)
             logger.info(f"Route saved to: {output_paths['route_image']}")
         except ValueError as e:
             error_msg = f"Failed to parse route: {e}"
@@ -602,6 +604,8 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             "--extraction-output-image", str(output_paths['extracted_image']),
             "--validated-output-image", str(output_paths['validated_image']),
             "--validated-output-json", str(output_paths['validation_json']),
+            "--skip-alignment",
+            "--route-coordinates-file", str(output_paths['route_coordinates']),
         ]
         
         # Run validation_pipeline.py with UTF-8 encoding for child process
@@ -631,7 +635,8 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             data = {
                 "svr": svr,
                 "scsr": scsr,
-                "scar": scar
+                "scar": scar,
+                "geometric_fidelity": summary.get("geometric_fidelity")
             }
             
             with open(output_paths['final_json'], "w") as f:

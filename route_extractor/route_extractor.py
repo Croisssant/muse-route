@@ -39,6 +39,7 @@ class RouteExtractionResult:
     skeleton_mask: any
     route_distance: float
     alignment_method: str
+    geometric_fidelity: any = None
 
 
 class RouteExtractor:
@@ -443,6 +444,78 @@ class RouteExtractor:
                 break
         print(f"    Skeletonization completed in {iteration} iterations")
         return skeleton
+
+    # ──────────────────────────────────────────────────────────────────
+    # Geometric fidelity (extracted skeleton vs. source coordinates)
+    # ──────────────────────────────────────────────────────────────────
+
+    def _point_to_segment_distances(self, points, seg_starts, seg_ends):
+        """
+        Vectorized minimum distance from each point to any of the given segments.
+
+        points     : (N, 2) array of (x, y)
+        seg_starts : (M, 2) array of segment start points
+        seg_ends   : (M, 2) array of segment end points
+
+        Returns (N,) array of distances.
+        """
+        p  = points[:, None, :]      # (N, 1, 2)
+        a  = seg_starts[None, :, :]  # (1, M, 2)
+        b  = seg_ends[None, :, :]    # (1, M, 2)
+        ab = b - a                   # (1, M, 2)
+        ap = p - a                   # (N, M, 2)
+
+        ab_len_sq = np.sum(ab * ab, axis=2)                    # (1, M)
+        ab_len_sq_safe = np.where(ab_len_sq == 0, 1, ab_len_sq)
+        t = np.sum(ap * ab, axis=2) / ab_len_sq_safe           # (N, M)
+        t = np.clip(t, 0, 1)
+
+        proj = a + t[..., None] * ab   # (N, M, 2)
+        diff = p - proj                # (N, M, 2)
+        dist = np.sqrt(np.sum(diff * diff, axis=2))  # (N, M)
+        return dist.min(axis=1)        # (N,)
+
+    def _calculate_geometric_fidelity(self, skeleton_mask, source_coordinates, tolerance_px=3):
+        """
+        Compare the extracted route skeleton against the original source
+        coordinates (e.g. the VLM's raw output route) to measure how much
+        shape was preserved through the draw -> image -> extract round trip.
+
+        For every skeleton pixel, computes the distance to the nearest point
+        on the polyline formed by connecting consecutive source_coordinates.
+        `similarity_percent` is the fraction of skeleton pixels within
+        `tolerance_px` of that ideal polyline.
+        """
+        ys, xs = np.where(skeleton_mask > 0)
+        skeleton_points = np.column_stack([xs, ys]).astype(np.float64)
+
+        coords = np.array(source_coordinates, dtype=np.float64) if source_coordinates else np.empty((0, 2))
+
+        if len(coords) < 2 or len(skeleton_points) == 0:
+            return {
+                'similarity_percent': 0.0,
+                'tolerance_px': tolerance_px,
+                'mean_deviation_px': None,
+                'max_deviation_px': None,
+                'skeleton_point_count': int(len(skeleton_points)),
+                'points_within_tolerance': 0,
+            }
+
+        seg_starts = coords[:-1]
+        seg_ends = coords[1:]
+
+        distances = self._point_to_segment_distances(skeleton_points, seg_starts, seg_ends)
+        within = distances <= tolerance_px
+        similarity_percent = 100.0 * np.count_nonzero(within) / len(distances)
+
+        return {
+            'similarity_percent': round(float(similarity_percent), 2),
+            'tolerance_px': tolerance_px,
+            'mean_deviation_px': round(float(distances.mean()), 3),
+            'max_deviation_px': round(float(distances.max()), 3),
+            'skeleton_point_count': int(len(distances)),
+            'points_within_tolerance': int(np.count_nonzero(within)),
+        }
 
     # ──────────────────────────────────────────────────────────────────
     # Endpoint detection
@@ -1192,7 +1265,7 @@ class RouteExtractor:
     # Main entry point
     # ──────────────────────────────────────────────────────────────────
 
-    def determine_route(self, route_image_path, original_image_path, difference_threshold=10, tolerance_px=3, debug=False):
+    def determine_route(self, route_image_path, original_image_path, difference_threshold=10, tolerance_px=3, debug=False, skip_alignment=False, source_coordinates=None, fidelity_tolerance_px=3):
         print("\n" + "="*70)
         print("ROUTE DETERMINATION")
         print("="*70)
@@ -1215,9 +1288,22 @@ class RouteExtractor:
         # guarantee the same coordinate space (e.g. the route image may have
         # been re-exported at the same resolution but with a different crop or
         # padding). Alignment ensures annotations land at the correct pixels.
-        print("\n[2/5] Aligning route image to original coordinate space…")
-        aligned_route, alignment_method = self._align_route_image(
-            route_img, original_img)
+        # skip_alignment bypasses this entirely for callers that drew the
+        # route directly onto an unmodified copy of the original image, where
+        # the coordinate spaces are already guaranteed identical.
+        if skip_alignment:
+            if route_img.shape[:2] != original_img.shape[:2]:
+                raise RouteAlignmentError(
+                    "skip_alignment=True requires the route image and original "
+                    f"image to have identical dimensions, got {route_img.shape[:2]} "
+                    f"vs {original_img.shape[:2]}."
+                )
+            print("\n[2/5] Skipping alignment (route drawn directly on original image)…")
+            aligned_route, alignment_method = route_img, 'skipped (drawn on original)'
+        else:
+            print("\n[2/5] Aligning route image to original coordinate space…")
+            aligned_route, alignment_method = self._align_route_image(
+                route_img, original_img)
         print(f"    Alignment method used: {alignment_method}")
 
         # ── Difference ────────────────────────────────────────────────
@@ -1275,6 +1361,19 @@ class RouteExtractor:
         points    = [(int(p[1]), int(p[0])) for p in raw_pts]
         endpoints, skeleton_mask, route_distance = self._find_route_endpoints(final_mask, connectivity, debug)
 
+        # ── Geometric fidelity ───────────────────────────────────────────
+        # Only computed when the caller supplies the original source
+        # coordinates (e.g. the VLM's raw output route) to compare against.
+        geometric_fidelity = None
+        if source_coordinates is not None:
+            print("\nComputing geometric fidelity vs. source coordinates…")
+            geometric_fidelity = self._calculate_geometric_fidelity(
+                skeleton_mask, source_coordinates, tolerance_px=fidelity_tolerance_px)
+            print(f"    Similarity: {geometric_fidelity['similarity_percent']}% "
+                  f"(tolerance={fidelity_tolerance_px}px, "
+                  f"mean_dev={geometric_fidelity['mean_deviation_px']}px, "
+                  f"max_dev={geometric_fidelity['max_deviation_px']}px)")
+
         return RouteExtractionResult(
             aligned_route=aligned_route,
             points=points,
@@ -1284,6 +1383,7 @@ class RouteExtractor:
             skeleton_mask=skeleton_mask,
             route_distance=route_distance,
             alignment_method=alignment_method,
+            geometric_fidelity=geometric_fidelity,
         )
     
     def summary(self, alignment_method, connectivity, endpoints):
@@ -1508,14 +1608,17 @@ class RouteExtractor:
         else:
             pil.show()
 
-    def process_pipeline(self, route_image_path, original_image_path, output_path=None, marker_size=10, difference_threshold=10, tolerance_px=3, debug=False):
+    def process_pipeline(self, route_image_path, original_image_path, output_path=None, marker_size=10, difference_threshold=10, tolerance_px=3, debug=False, skip_alignment=False, source_coordinates=None, fidelity_tolerance_px=3):
 
         results = self.determine_route(
-            route_image_path, 
+            route_image_path,
             original_image_path,
             difference_threshold,
             tolerance_px,
-            debug
+            debug,
+            skip_alignment,
+            source_coordinates,
+            fidelity_tolerance_px
         )
 
         if results.route_distance is None:
@@ -1567,17 +1670,38 @@ Example:
     parser.add_argument('--output',               default='route_endpoints.png')
     parser.add_argument('--marker-size',          type=int, default=15)
     parser.add_argument('--debug', action='store_true', help='Enable debugging displays (disabled by default)')
+    parser.add_argument('--skip-alignment', action='store_true',
+                        help='Skip homography alignment. Only safe when the route image '
+                             'was drawn directly onto an unmodified copy of the original '
+                             'image (same dimensions, same coordinate space).')
+    parser.add_argument('--source-coordinates-file', default=None,
+                        help='Path to a JSON file containing the original source route '
+                             'coordinates (e.g. the VLM output route) as a list of [x, y] '
+                             'pairs. When provided, computes a geometric_fidelity score '
+                             'comparing the extracted skeleton against this route.')
+    parser.add_argument('--fidelity-tolerance-px', type=int, default=3,
+                        help='Pixel tolerance used for the geometric_fidelity similarity '
+                             'percentage (default: 3, roughly half the drawn line width).')
 
     args = parser.parse_args()
+
+    source_coordinates = None
+    if args.source_coordinates_file:
+        with open(args.source_coordinates_file, 'r', encoding='utf-8') as f:
+            source_coordinates = json.load(f)
+
     route_extractor  = RouteExtractor(args.annotations)
     route_extractor.process_pipeline(
-        route_image_path     = args.route_image,
-        original_image_path  = args.original_image,
-        output_path          = args.output,
-        marker_size          = args.marker_size,
-        difference_threshold = args.difference_threshold,
-        tolerance_px         = args.tolerance,
-        debug                = args.debug
+        route_image_path      = args.route_image,
+        original_image_path   = args.original_image,
+        output_path           = args.output,
+        marker_size           = args.marker_size,
+        difference_threshold  = args.difference_threshold,
+        tolerance_px          = args.tolerance,
+        debug                 = args.debug,
+        skip_alignment        = args.skip_alignment,
+        source_coordinates    = source_coordinates,
+        fidelity_tolerance_px = args.fidelity_tolerance_px
     )
   
 
