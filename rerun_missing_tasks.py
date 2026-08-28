@@ -12,6 +12,13 @@ from pathlib import Path
 from collections import defaultdict
 import re
 
+from check_missing_results import (
+    discover_expected_tasks,
+    check_missing_directories,
+    check_missing_final_results,
+    build_missing_by_model,
+)
+
 
 def parse_model_and_reasoning(model_folder):
     """
@@ -118,56 +125,60 @@ def group_missing_tasks(missing_data, model_filter=None, difficulty_filter=None)
     return grouped
 
 
-def generate_commands(grouped_tasks, backend='openai', timeout=None, base_url=None):
+def generate_commands(grouped_tasks, backend='openai', timeout=None, base_url=None, results_dir='results'):
     """
     Generate command list from grouped tasks.
     Returns list of tuples: (description, command_args)
     """
     commands = []
-    
+
     for model_folder, difficulties in sorted(grouped_tasks.items()):
         model, reasoning = parse_model_and_reasoning(model_folder)
-        
+
         for difficulty, complexity_tasks in sorted(difficulties.items()):
             script = get_script_for_difficulty(difficulty)
             if not script:
                 print(f"⚠️  Warning: Unknown difficulty '{difficulty}' for model {model_folder}")
                 continue
-            
+
             for complexity_task_key, layouts in sorted(complexity_tasks.items()):
                 complexity, task = complexity_task_key.split('|')
-                
+
                 # Build command
                 cmd = ['python', script, '--backend', backend, '--model', model]
-                
+
                 # Add reasoning if present
                 if reasoning:
                     cmd.extend(['--reasoning', reasoning])
-                
+
                 # Add complexity
                 cmd.extend(['--complexity-mode', 'single', '--complexity', complexity])
-                
+
                 # Add layouts
                 cmd.extend(['--layout-mode', 'list', '--layouts'] + sorted(layouts))
-                
+
                 # Add tasks if applicable (hard/medium have task variants)
                 if task != 'None':
                     cmd.extend(['--tasks', task])
-                
+
                 # Add base_url if specified
                 if base_url:
                     cmd.extend(['--base-url', base_url])
-                
+
                 # Add timeout if specified
                 if timeout is not None:
                     cmd.extend(['--timeout', str(timeout)])
-                
+
+                # Results dir - so reruns land back in the same directory the
+                # missing tasks were discovered from, not the script's default
+                cmd.extend(['--results-dir', results_dir])
+
                 # Description for display
                 task_display = f"[{task}]" if task != 'None' else ""
                 desc = f"{model_folder} | {difficulty} | {complexity} {task_display} | {len(layouts)} layouts"
-                
+
                 commands.append((desc, cmd))
-    
+
     return commands
 
 
@@ -250,8 +261,15 @@ Examples:
     )
     
     parser.add_argument('--input-file', type=str, default='missing_final_results.json',
-                       help='Path to missing results JSON file (default: missing_final_results.json)')
-    
+                       help='Path to missing results JSON file (default: missing_final_results.json). '
+                            'Ignored when --results-dir is given.')
+
+    parser.add_argument('--results-dir', type=str, default=None,
+                       help='Results directory to check and rerun into (e.g. ./results_second). '
+                            'When given, missing tasks are discovered live from this directory '
+                            'instead of reading --input-file, and generated commands write back '
+                            'into this same directory. Default: read --input-file, write into "results".')
+
     parser.add_argument('--model', type=str, default=None,
                        help='Filter by specific model folder name (e.g., "gpt-5.4(high)"). Default: process all models')
     
@@ -272,27 +290,44 @@ Examples:
                        help='Show commands without executing them')
     
     args = parser.parse_args()
-    
-    # Load missing results
-    if not Path(args.input_file).exists():
-        print(f"✗ Error: Input file '{args.input_file}' not found!")
-        sys.exit(1)
-    
-    with open(args.input_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    
-    missing_by_model = data.get('missing_by_model', {})
-    
+
+    if args.results_dir:
+        # Live mode: discover missing tasks directly from the results
+        # directory instead of a pre-generated missing_final_results.json -
+        # always fresh, and scoped to exactly this results-dir.
+        if not Path(args.results_dir).exists():
+            print(f"✗ Error: Results directory '{args.results_dir}' not found!")
+            sys.exit(1)
+
+        results_dir = args.results_dir
+        print(f"📋 Discovering missing tasks live from: {results_dir}")
+        expected_tasks = discover_expected_tasks()
+        missing_dirs = check_missing_directories(expected_tasks, results_dir)
+        missing_files, _ = check_missing_final_results(results_dir)
+        missing_by_model = build_missing_by_model(missing_dirs, missing_files)
+    else:
+        results_dir = 'results'
+        if not Path(args.input_file).exists():
+            print(f"✗ Error: Input file '{args.input_file}' not found!")
+            sys.exit(1)
+
+        with open(args.input_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        missing_by_model = data.get('missing_by_model', {})
+
     if not missing_by_model:
         print("✓ No missing results found!")
         return
-    
+
     # Display summary
     print("=" * 80)
     print("RERUN MISSING TASKS")
     print("=" * 80)
     print(f"\nConfiguration:")
-    print(f"  Input file: {args.input_file}")
+    print(f"  Results dir: {results_dir}")
+    if not args.results_dir:
+        print(f"  Input file: {args.input_file}")
     print(f"  Backend: {args.backend}")
     print(f"  Model filter: {args.model if args.model else 'All models'}")
     print(f"  Difficulty filter: {args.difficulty if args.difficulty else 'All difficulties'}")
@@ -309,7 +344,7 @@ Examples:
         return
     
     # Generate commands
-    commands = generate_commands(grouped, args.backend, args.timeout, args.base_url)
+    commands = generate_commands(grouped, args.backend, args.timeout, args.base_url, results_dir)
     
     if not commands:
         print("\n✗ No commands generated!")

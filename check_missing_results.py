@@ -9,6 +9,7 @@ Checks both:
 import os
 import glob
 import json
+import argparse
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
@@ -264,17 +265,55 @@ def print_model_summary(missing_dirs, missing_files):
     print("=" * 80)
 
 
+def build_missing_by_model(missing_dirs, missing_files):
+    """
+    Merge missing directories and missing final_results.json entries into a
+    single {model: {difficulty: [paths]}} structure - the 'missing_by_model'
+    format rerun_missing_tasks.py consumes, either from a saved JSON file or
+    computed live in-process.
+    """
+    missing_by_model = {}
+    all_models = set(missing_dirs.keys()) | set(missing_files.keys())
+
+    for model in sorted(all_models):
+        missing_by_model[model] = {}
+
+        # Get all difficulties for this model
+        all_difficulties = set()
+        if model in missing_dirs:
+            all_difficulties.update(missing_dirs[model].keys())
+        if model in missing_files:
+            all_difficulties.update(missing_files[model].keys())
+
+        # Merge missing directories and missing files into a single list per difficulty
+        for difficulty in sorted(all_difficulties):
+            combined_paths = []
+
+            # Add missing directories (extract just the path string)
+            if model in missing_dirs and difficulty in missing_dirs[model]:
+                combined_paths.extend([item['path'] for item in missing_dirs[model][difficulty]])
+
+            # Add missing files (already just path strings)
+            if model in missing_files and difficulty in missing_files[model]:
+                combined_paths.extend(missing_files[model][difficulty])
+
+            # Sort and store
+            missing_by_model[model][difficulty] = sorted(combined_paths)
+
+    return missing_by_model
+
+
 def save_to_json(missing_dirs, missing_files, total_folders, expected_count, output_file='missing_final_results.json'):
     """
     Save the missing results data to a JSON file.
     Maintains compatibility with rerun_missing_tasks.py by using 'missing_by_model' format.
     """
     # Calculate totals
-    total_missing_dirs = sum(len(tasks) for model_data in missing_dirs.values() 
+    total_missing_dirs = sum(len(tasks) for model_data in missing_dirs.values()
                              for tasks in model_data.values())
-    total_missing_files = sum(len(folders) for model_data in missing_files.values() 
+    total_missing_files = sum(len(folders) for model_data in missing_files.values()
                               for folders in model_data.values())
-    
+
     # Build output structure (compatible with rerun_missing_tasks.py)
     output_data = {
         "timestamp": datetime.now().isoformat(),
@@ -286,74 +325,71 @@ def save_to_json(missing_dirs, missing_files, total_folders, expected_count, out
             "total_missing": total_missing_dirs + total_missing_files,
             "success_rate_percent": round((total_folders - total_missing_files) / total_folders * 100, 1) if total_folders > 0 else 0
         },
-        "missing_by_model": {}
+        "missing_by_model": build_missing_by_model(missing_dirs, missing_files)
     }
-    
-    # Get all models
-    all_models = set(missing_dirs.keys()) | set(missing_files.keys())
-    
-    for model in sorted(all_models):
-        output_data["missing_by_model"][model] = {}
-        
-        # Get all difficulties for this model
-        all_difficulties = set()
-        if model in missing_dirs:
-            all_difficulties.update(missing_dirs[model].keys())
-        if model in missing_files:
-            all_difficulties.update(missing_files[model].keys())
-        
-        # Merge missing directories and missing files into a single list per difficulty
-        for difficulty in sorted(all_difficulties):
-            combined_paths = []
-            
-            # Add missing directories (extract just the path string)
-            if model in missing_dirs and difficulty in missing_dirs[model]:
-                combined_paths.extend([item['path'] for item in missing_dirs[model][difficulty]])
-            
-            # Add missing files (already just path strings)
-            if model in missing_files and difficulty in missing_files[model]:
-                combined_paths.extend(missing_files[model][difficulty])
-            
-            # Sort and store
-            output_data["missing_by_model"][model][difficulty] = sorted(combined_paths)
-    
+
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
-    
+
     return output_file
 
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description='Check for missing results (directories and final_results.json files)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python check_missing_results.py
+  python check_missing_results.py --results-dir ./results_second
+        """
+    )
+
+    parser.add_argument('--floorplans-dir', type=str, default='floorplans',
+                       help='Path to the floorplans directory (default: floorplans)')
+
+    parser.add_argument('--results-dir', type=str, default='results',
+                       help='Path to the results directory to check (default: results)')
+
+    parser.add_argument('--output-file', type=str, default='missing_final_results.json',
+                       help='Path to write the missing-results JSON report to (default: missing_final_results.json)')
+
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
+    args = parse_arguments()
+
     print("Checking for missing results...\n")
-    
+
     # Check if directories exist
-    if not os.path.exists('floorplans'):
-        print("Error: 'floorplans' directory not found!")
+    if not os.path.exists(args.floorplans_dir):
+        print(f"Error: '{args.floorplans_dir}' directory not found!")
         exit(1)
-    
-    if not os.path.exists('results'):
-        print("Error: 'results' directory not found!")
+
+    if not os.path.exists(args.results_dir):
+        print(f"Error: '{args.results_dir}' directory not found!")
         exit(1)
-    
+
     # Discover expected tasks
     print("📋 Discovering expected layout × task combinations...")
-    expected_tasks = discover_expected_tasks()
+    expected_tasks = discover_expected_tasks(args.floorplans_dir)
     expected_count = len(expected_tasks)
     print(f"   Found {expected_count} expected combinations\n")
-    
+
     # Check for missing directories
     print("🔍 Checking for missing result directories...")
-    missing_dirs = check_missing_directories(expected_tasks)
-    
+    missing_dirs = check_missing_directories(expected_tasks, args.results_dir)
+
     # Check for missing final_results.json in existing directories
     print("🔍 Checking for missing final_results.json files...")
-    missing_files, total_folders = check_missing_final_results()
-    
+    missing_files, total_folders = check_missing_final_results(args.results_dir)
+
     print()
-    
+
     # Save to JSON file
-    output_file = save_to_json(missing_dirs, missing_files, total_folders, expected_count)
+    output_file = save_to_json(missing_dirs, missing_files, total_folders, expected_count, args.output_file)
     print(f"✓ Results saved to: {output_file}")
-    
+
     # Print model summary
     print_model_summary(missing_dirs, missing_files)

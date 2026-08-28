@@ -8,7 +8,6 @@ import argparse
 import logging
 import threading
 from dotenv import load_dotenv
-from openai import OpenAI
 from tqdm import tqdm
 
 from pathlib import Path
