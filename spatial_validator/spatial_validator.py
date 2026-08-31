@@ -11,6 +11,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import math
 
+from prompts_utils import atomic_save_image
+
 class SpatialValidator:
     def __init__(self, annotations_file, proximity_threshold=25):
         """
@@ -904,7 +906,7 @@ class SpatialValidator:
         
         # Save
         if output_path:
-            img.save(output_path)
+            atomic_save_image(img, output_path)
             print(f"Validation visualization saved to: {output_path}")
 
         else:

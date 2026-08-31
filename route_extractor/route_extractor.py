@@ -8,6 +8,8 @@ from pathlib import Path
 from dataclasses import dataclass
 from skimage.morphology import skeletonize
 
+from prompts_utils import atomic_save_image
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Custom Exceptions
@@ -15,6 +17,11 @@ from skimage.morphology import skeletonize
 
 class RouteAlignmentError(Exception):
     """Raised when route image cannot be aligned to the original coordinate space."""
+    pass
+
+
+class NoRouteFoundError(RuntimeError):
+    """Raised when the extracted route mask has zero pixels (no route detected)."""
     pass
 
 
@@ -1602,7 +1609,7 @@ class RouteExtractor:
             draw.text((lx + 28, ly), label, fill=(255, 255, 255), font=lf)
 
         if output_path:
-            pil.save(output_path)
+            atomic_save_image(pil, output_path)
             print(f"\n✅ Visualization saved to: {output_path} "
                 f"({pil.size[0]}×{pil.size[1]} px)")
         else:
@@ -1620,6 +1627,9 @@ class RouteExtractor:
             source_coordinates,
             fidelity_tolerance_px
         )
+
+        if results is None:
+            raise NoRouteFoundError("No route points found in the extracted mask")
 
         if results.route_distance is None:
             distance_info = self.calculate_route_distance(

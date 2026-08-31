@@ -1,13 +1,62 @@
 import io
 import base64
 import json
+import os
 import re
+import tempfile
 
 from abc import ABC, abstractmethod
 from pathlib import Path
 from PIL import Image, ImageDraw
 
 MAX_NEW_TOKENS = 1024
+
+# Signals a validation_pipeline.py subprocess exit when route extraction found
+# no route points, so callers can distinguish it from an arbitrary crash and
+# record a real zero score instead of leaving the task's results missing.
+NO_ROUTE_FOUND_EXIT_CODE = 3
+
+
+def atomic_write_json(path, data, **json_kwargs):
+    """Write JSON to `path` atomically (temp file + os.replace).
+
+    Prevents readers from ever seeing a partially-written file if two
+    processes write the same path concurrently, or if a write is
+    interrupted partway through on a flaky mount.
+    """
+    path = Path(path)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, **json_kwargs)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def atomic_save_image(image, path, **save_kwargs):
+    """Save a PIL image to `path` atomically (temp file + os.replace).
+
+    Same rationale as atomic_write_json: image.save() issues many internal
+    writes during encoding, and a partial/failed write should never leave a
+    corrupted file at the real destination.
+    """
+    path = Path(path)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}.", suffix=path.suffix)
+    os.close(fd)
+    try:
+        image.save(tmp_path, **save_kwargs)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
 
 def select_fields(source_dict, fields):
     return {
@@ -403,7 +452,7 @@ def parse_route_and_save(input_image_path, output_image_path, text_output_route)
     draw.line(route, fill="red", width=5)
 
     # -------- Save output image --------
-    image.save(output_image_path)
+    atomic_save_image(image, output_image_path)
     print(f"Route drawn and saved to {output_image_path}")
 
     return route

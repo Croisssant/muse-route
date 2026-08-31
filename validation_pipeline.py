@@ -1,10 +1,13 @@
 import argparse
 import json
+import sys
 
 from pathlib import Path
 from spatial_validator import SpatialValidator
 from semantic_validator import SemanticValidator
 from route_extractor import RouteExtractor
+from route_extractor.route_extractor import NoRouteFoundError
+from prompts_utils import atomic_write_json, NO_ROUTE_FOUND_EXIT_CODE
 
 def load_json(file_path):
     """
@@ -101,18 +104,22 @@ def main():
     
     # Use parsed arguments
     re = RouteExtractor(annotations_path)
-    route_extraction_results = re.process_pipeline(
-        route_image_path=route_image_path,
-        original_image_path=original_image_path,
-        output_path=extraction_output_image_path,
-        marker_size=args.marker_size,
-        difference_threshold=args.difference_threshold,
-        tolerance_px=args.tolerance,
-        debug=args.debug,
-        skip_alignment=args.skip_alignment,
-        source_coordinates=source_coordinates,
-        fidelity_tolerance_px=args.fidelity_tolerance_px
-    )
+    try:
+        route_extraction_results = re.process_pipeline(
+            route_image_path=route_image_path,
+            original_image_path=original_image_path,
+            output_path=extraction_output_image_path,
+            marker_size=args.marker_size,
+            difference_threshold=args.difference_threshold,
+            tolerance_px=args.tolerance,
+            debug=args.debug,
+            skip_alignment=args.skip_alignment,
+            source_coordinates=source_coordinates,
+            fidelity_tolerance_px=args.fidelity_tolerance_px
+        )
+    except NoRouteFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(NO_ROUTE_FOUND_EXIT_CODE)
     
 
     print("\n" + "="*70)
@@ -183,8 +190,7 @@ def main():
     validation_result['validation_summary']['scar'] = scar
     validation_result['semantic_validation_details'] = semantic_result_detailed
     
-    with open(args.validated_output_json, "w") as json_file:
-        json.dump(validation_result, json_file, indent=4)
+    atomic_write_json(args.validated_output_json, validation_result, indent=4)
     
 
 if __name__ == '__main__':

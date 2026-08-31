@@ -7,6 +7,7 @@ import io
 import argparse
 import logging
 import threading
+import time
 
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -19,7 +20,7 @@ from prompts_utils import (load_image, prompt_model,
                            discover_complexity_and_layouts, build_paths,
                            extract_scar_validations, extract_validation_fields,
                            build_backend, create_failure_final_results,
-                           save_response_record)
+                           save_response_record, atomic_write_json, NO_ROUTE_FOUND_EXIT_CODE)
  
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
@@ -484,9 +485,8 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             
             # Create failure final_results.json
             failure_data = create_failure_final_results(SVR_FIELDS, SCSR_FIELDS, SCAR_FIELDS)
-            with open(output_paths['final_json'], "w") as f:
-                json.dump(failure_data, f, indent=2)
-            
+            atomic_write_json(output_paths['final_json'], failure_data, indent=2)
+
             logger.info(f"Empty/invalid route - failure results saved to: {output_paths['final_json']}")
             print(f"✗ {complexity}/{layout_name}: Empty route")
             return False
@@ -524,29 +524,44 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
                     logger.info(line)
         
         # Load and display validation results
-        if output_paths['validation_json'].exists():
+        validation_json_exists = output_paths['validation_json'].exists()
+        if not validation_json_exists:
+            # Subprocess reported success but the file isn't visible yet -- most
+            # likely a filesystem consistency lag on a network-backed mount.
+            # Give it a few retries before treating it as a real failure.
+            for _ in range(3):
+                time.sleep(0.5)
+                if output_paths['validation_json'].exists():
+                    validation_json_exists = True
+                    break
+
+        if validation_json_exists:
             with open(output_paths['validation_json'], "r", encoding="utf-8") as f:
                 validation_data = json.load(f)
-                
+
             summary = validation_data['validation_summary']
-            
-            # Extract and filter validation fields  
+
+            # Extract and filter validation fields
             svr = extract_validation_fields(summary["svr"], SVR_FIELDS)
             scsr = extract_validation_fields(summary["scsr"], SCSR_FIELDS)
             scar = extract_scar_validations(summary["scar"], configs, SCAR_FIELDS)
-            
+
             data = {
                 "svr": svr,
                 "scsr": scsr,
                 "scar": scar,
                 "geometric_fidelity": summary.get("geometric_fidelity")
             }
-            
-            with open(output_paths['final_json'], "w") as f:
-                json.dump(data, f, indent=2)
-            
+
+            atomic_write_json(output_paths['final_json'], data, indent=2)
+
             logger.info(f"Validation complete. Results saved to: {output_paths['final_json']}")
-        
+        else:
+            error_msg = f"validation_json missing after successful subprocess run: {output_paths['validation_json']}"
+            logger.error(error_msg)
+            print(f"✗ {complexity}/{layout_name}: {error_msg}")
+            return False
+
         logger.info(f"Successfully processed: {layout_folder.name}")
         logger.info(f"Log file saved to: {log_file}")
         
@@ -556,6 +571,13 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
         return True
         
     except subprocess.CalledProcessError as e:
+        if e.returncode == NO_ROUTE_FOUND_EXIT_CODE:
+            logger.info("No route points found during validation - recording zero score")
+            failure_data = create_failure_final_results(SVR_FIELDS, SCSR_FIELDS, SCAR_FIELDS)
+            atomic_write_json(output_paths['final_json'], failure_data, indent=2)
+            print(f"✗ {complexity}/{layout_name}: No route points found (zero score)")
+            return False
+
         error_msg = f"Error running validation for {layout_folder.name}"
         logger.error(error_msg)
         logger.error(f"Return code: {e.returncode}")
