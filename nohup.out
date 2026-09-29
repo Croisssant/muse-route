@@ -1,0 +1,140 @@
+======================================================================
+MUSEUM ROUTE PLANNING - BATCH PROCESSOR
+======================================================================
+
+Configuration:
+  Backend:    openai
+  Model: gpt-5.4
+  Difficulty: easy_semantic
+  Complexity Mode: all
+  Layout Mode: all
+  Base directory: floorplans
+  Config file: easy_semantic.json
+  Output directory: results/gpt-5.4/easy_semantic
+======================================================================
+
+✓ Found 48 layout(s) to process:
+  - complex/layout_03
+  - complex/layout_04
+  - complex/layout_07
+  - complex/layout_08
+  - complex/layout_10
+  - complex/layout_11
+  - complex/layout_13
+  - complex/layout_14
+  - complex/layout_20
+  - complex/layout_22
+  - complex/layout_36
+  - complex/layout_40
+  - complex/layout_42
+  - complex/layout_44
+  - simple/layout_01
+  - simple/layout_02
+  - simple/layout_05
+  - simple/layout_09
+  - simple/layout_12
+  - simple/layout_15
+  - simple/layout_16
+  - simple/layout_17
+  - simple/layout_18
+  - simple/layout_19
+  - simple/layout_21
+  - simple/layout_23
+  - simple/layout_24
+  - simple/layout_25
+  - simple/layout_26
+  - simple/layout_27
+  - simple/layout_28
+  - simple/layout_29
+  - simple/layout_30
+  - simple/layout_31
+  - simple/layout_32
+  - simple/layout_33
+  - simple/layout_34
+  - simple/layout_35
+  - simple/layout_38
+  - simple/layout_39
+  - simple/layout_41
+  - simple/layout_43
+  - simple/layout_45
+  - simple/layout_46
+  - simple/layout_47
+  - simple/layout_48
+  - simple/layout_49
+  - simple/layout_50
+
+[Semantic] Processing layouts:   0%|          | 0/48 [00:00<?, ?layout/s][Semantic] complex/layout_03:   0%|          | 0/48 [00:00<?, ?layout/s] [Semantic] complex/layout_03 - Exhibit selection:   0%|          | 0/48 [00:00<?, ?layout/s]Selected exhibit IDs: [42, 37, 38, 39, 40, 41]
+[Semantic] complex/layout_03 - Route planning:   0%|          | 0/48 [00:03<?, ?layout/s]   text_output_route: 
+[[2208,4235],[2208,3900],[2208,3550],[2208,3200],[2208,2900],[2050,2900],[1850,2900],[1650,2900],[1450,2900],[1250,2900],[1050,2900],[900,2800],[900,2550],[980,2350],[1120,2250],[1320,2140],[1540,2040],[1760,1960],[1910,1890],[1910,1700],[1840,1700],[1840,1930],[2020,1930],[2020,1690],[1700,1690],[1400,1690],[1100,1690],[850,1690],[650,1690]]
+Route drawn and saved to results/gpt-5.4/easy_semantic/complex/easy_semantic_layout_03/gpt-5.4_route.png
+[Semantic] complex/layout_03 - Validation:   0%|          | 0/48 [00:08<?, ?layout/s]                                                                                         Traceback (most recent call last):
+  File "/data/kaiwey/muse-route/prompts_easy_semantic.py", line 777, in <module>
+    main()
+    ~~~~^^
+  File "/data/kaiwey/muse-route/prompts_easy_semantic.py", line 752, in main
+    success = process_layout_with_timeout(layout_folder, MODEL, DIFFICULTY, complexity,
+                                           timeout=args.timeout, pbar=pbar)
+  File "/data/kaiwey/muse-route/prompts_easy_semantic.py", line 268, in process_layout_with_timeout
+    return process_layout(layout_folder, model_name, difficulty, complexity, pbar)
+  File "/data/kaiwey/muse-route/prompts_easy_semantic.py", line 613, in process_layout
+    result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', env=env)
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 556, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 1222, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 2125, in _communicate
+    ready = selector.select(timeout)
+  File "/data/projects/muse-route/python313/lib/python3.13/selectors.py", line 398, in select
+    fd_event_list = self._selector.poll(timeout)
+KeyboardInterrupt
+======================================================================
+MASTER SCRIPT - SEQUENTIAL PROMPT EXECUTION
+======================================================================
+
+Configuration:
+  Backend: openai
+  Model: gpt-5.4
+  Reasoning: None
+  Execution Mode: sync
+  Output Folder: gpt-5.4
+  Complexity Mode: all
+  Layout Mode: all
+  Floorplan Dir: floorplans
+  Results Dir: results
+  Master Log: results/gpt-5.4/master_execution.log
+======================================================================
+
+Running all scripts sequentially (synchronous mode)...
+
+Traceback (most recent call last):
+  File "/data/kaiwey/muse-route/run_all_prompts.py", line 459, in <module>
+    main()
+    ~~~~^^
+  File "/data/kaiwey/muse-route/run_all_prompts.py", line 413, in main
+    results = run_all_scripts_sync(args, logger)
+  File "/data/kaiwey/muse-route/run_all_prompts.py", line 358, in run_all_scripts_sync
+    result = run_script_sync(script_name, label, args.backend, args.model, args.reasoning, args, logger)
+  File "/data/kaiwey/muse-route/run_all_prompts.py", line 319, in run_script_sync
+    result = subprocess.run(
+        cmd,
+        capture_output=False,  # Don't capture - let output stream directly
+        text=True
+    )
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 556, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 1214, in communicate
+    self.wait()
+    ~~~~~~~~~^^
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 1277, in wait
+    return self._wait(timeout=timeout)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 2063, in _wait
+    (pid, sts) = self._try_wait(0)
+                 ~~~~~~~~~~~~~~^^^
+  File "/data/projects/muse-route/python313/lib/python3.13/subprocess.py", line 2021, in _try_wait
+    (pid, sts) = os.waitpid(self.pid, wait_flags)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

@@ -6,6 +6,9 @@ final_results.json files under a results directory.
 Tasks whose final_results.json has no "geometric_fidelity" key are skipped -
 that field is only written for a successfully-parsed, validated route, so its
 absence means the task failed (e.g. an out-of-bounds or unparseable route).
+
+After the per-model breakdown, an overall section reports, for each difficulty,
+the average of every model's average (each model weighted equally).
 """
 
 import argparse
@@ -14,14 +17,25 @@ from pathlib import Path
 from collections import defaultdict
 
 
+# Results folder name -> display label, in the order difficulties are printed
+DIFFICULTY_LABELS = {
+    'easy_spatial': 'Easy Spatial',
+    'easy_semantic': 'Easy Semantic',
+    'medium': 'Medium',
+    'hard': 'Hard',
+}
+DIFFICULTY_ORDER = list(DIFFICULTY_LABELS.values())
+
+
 def scan_model_results(results_dir, model_filter=None):
     """Walk results_dir/{model}/{difficulty}/{complexity}/{task}/final_results.json
     and collect geometric_fidelity.similarity_percent, grouped by model and
-    difficulty (easy_semantic/easy_spatial grouped as "Easy").
+    difficulty (Easy Spatial, Easy Semantic, Medium, Hard).
 
     Returns:
         dict: {model_name: {
-            'scores': {'Easy': [...], 'Medium': [...], 'Hard': [...], 'All': [...]},
+            'scores': {'Easy Spatial': [...], 'Easy Semantic': [...], 'Medium': [...],
+                       'Hard': [...], 'All': [...]},
             'found': int,     # final_results.json files found
             'skipped': int,   # found but missing geometric_fidelity (failed tasks)
         }}
@@ -43,14 +57,8 @@ def scan_model_results(results_dir, model_filter=None):
             if not difficulty_dir.is_dir():
                 continue
 
-            difficulty_name = difficulty_dir.name
-            if difficulty_name in ('easy_semantic', 'easy_spatial'):
-                grouped_difficulty = 'Easy'
-            elif difficulty_name == 'medium':
-                grouped_difficulty = 'Medium'
-            elif difficulty_name == 'hard':
-                grouped_difficulty = 'Hard'
-            else:
+            grouped_difficulty = DIFFICULTY_LABELS.get(difficulty_dir.name)
+            if grouped_difficulty is None:
                 continue
 
             for complexity_dir in difficulty_dir.iterdir():
@@ -103,18 +111,40 @@ def print_results(model_stats):
 
         if 'All' in scores:
             avg = sum(scores['All']) / len(scores['All'])
-            print(f"  {'All':8} avg={avg:6.2f}%  (n={len(scores['All']):4}/{found:4} tasks, {skipped} skipped/failed)")
+            print(f"  {'All':13} avg={avg:6.2f}%  (n={len(scores['All']):4}/{found:4} tasks, {skipped} skipped/failed)")
         else:
-            print(f"  {'All':8} No successful geometric_fidelity results ({found} tasks found, {skipped} skipped/failed)")
+            print(f"  {'All':13} No successful geometric_fidelity results ({found} tasks found, {skipped} skipped/failed)")
 
-        for difficulty in ['Easy', 'Medium', 'Hard']:
+        for difficulty in DIFFICULTY_ORDER:
             if difficulty in scores:
                 avg = sum(scores[difficulty]) / len(scores[difficulty])
-                print(f"  {difficulty:8} avg={avg:6.2f}%  (n={len(scores[difficulty]):4})")
+                print(f"  {difficulty:13} avg={avg:6.2f}%  (n={len(scores[difficulty]):4})")
 
         print()
 
     print("=" * 80)
+
+
+def print_overall_summary(model_stats):
+    """Print, per difficulty, the mean of each model's average (models weighted equally)."""
+    print("\n" + "=" * 80)
+    print("OVERALL - AVERAGE OF MODEL AVERAGES BY DIFFICULTY")
+    print("(each model counts equally, regardless of how many tasks it completed)")
+    print("=" * 80 + "\n")
+
+    for difficulty in DIFFICULTY_ORDER + ['All']:
+        model_avgs = [
+            sum(stats['scores'][difficulty]) / len(stats['scores'][difficulty])
+            for stats in model_stats.values()
+            if stats['scores'].get(difficulty)
+        ]
+        if model_avgs:
+            avg = sum(model_avgs) / len(model_avgs)
+            print(f"  {difficulty:13} avg={avg:6.2f}%  (across {len(model_avgs)} model{'s' if len(model_avgs) != 1 else ''})")
+        else:
+            print(f"  {difficulty:13} No results")
+
+    print("\n" + "=" * 80)
 
 
 def parse_arguments():
@@ -154,6 +184,7 @@ def main():
         return
 
     print_results(model_stats)
+    print_overall_summary(model_stats)
 
 
 if __name__ == '__main__':
