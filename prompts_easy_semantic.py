@@ -19,7 +19,7 @@ from prompts_utils import (load_image, exhibit_selection, prompt_model,
                            discover_complexity_and_layouts, build_paths,
                            extract_scar_validations, extract_validation_fields,
                            build_backend, create_failure_final_results,
-                           save_response_record, atomic_write_json, NO_ROUTE_FOUND_EXIT_CODE)
+                           save_response_record, atomic_write_json, atomic_write_text, NO_ROUTE_FOUND_EXIT_CODE)
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
 if sys.platform == 'win32':
@@ -430,6 +430,7 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
 
         try:
             text_output_selection, response = prompt_model(BACKEND, system_prompt_selection, user_prompt_selection, image_base64)
+            atomic_write_text(output_paths['raw_selection_output'], text_output_selection)
             gpt_selected_exhibits = exhibit_selection(text_output_selection, exhibits_list)
             save_response_record(
                 model_name=model_name,
@@ -562,6 +563,7 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             f.write(user_prompt_route)
 
         text_output_route, response = prompt_model(BACKEND, system_prompt_route, user_prompt_route, image_base64)
+        atomic_write_text(output_paths['raw_route_output'], text_output_route)
         save_response_record(
             model_name=model_name,
             difficulty=difficulty,

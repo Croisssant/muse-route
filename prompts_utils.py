@@ -38,6 +38,26 @@ def atomic_write_json(path, data, **json_kwargs):
         raise
 
 
+def atomic_write_text(path, text):
+    """Write text to `path` atomically (temp file + os.replace).
+
+    Same rationale as atomic_write_json. Uses UTF-8 explicitly since raw
+    model output may contain non-ASCII characters.
+    """
+    path = Path(path)
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def atomic_save_image(image, path, **save_kwargs):
     """Save a PIL image to `path` atomically (temp file + os.replace).
 
@@ -675,7 +695,9 @@ def build_paths(layout_folder, model_name, difficulty, complexity,
         'validated_image': output_dir / f"validated_{sanitized_model_name}_route.png",
         'validation_json': output_dir / "validation_results.json",
         'final_json': output_dir / "final_results.json",
-        'route_coordinates': output_dir / "route_coordinates.json"
+        'route_coordinates': output_dir / "route_coordinates.json",
+        'raw_selection_output': output_dir / "raw_output_exhibit_selection.txt",
+        'raw_route_output': output_dir / "raw_output_route_planning.txt"
     }
     
     return input_paths, output_paths
