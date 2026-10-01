@@ -58,6 +58,22 @@ def atomic_write_text(path, text):
         raise
 
 
+def save_raw_output(path, text, response, extra=None):
+    """Save raw model output to `path`, plus response metadata alongside it.
+
+    The metadata (e.g. Ollama's done_reason, token counts and thinking text,
+    or OpenAI's status and usage) goes to `<path stem>.meta.json`, so an
+    empty or truncated reply can be explained. Backends that return no
+    response object (HuggingFace) get no meta file.
+    """
+    path = Path(path)
+    atomic_write_text(path, text)
+
+    if hasattr(response, "model_dump"):
+        meta = {**(extra or {}), "response": response.model_dump(mode="json")}
+        atomic_write_json(path.with_suffix(".meta.json"), meta, indent=2)
+
+
 def atomic_save_image(image, path, **save_kwargs):
     """Save a PIL image to `path` atomically (temp file + os.replace).
 
@@ -282,7 +298,8 @@ class HuggingFaceBackend(ModelBackend):
 class OllamaBackend(ModelBackend):
     """Backend for Ollama models (local or remote)."""
  
-    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434"):
+    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434",
+                 num_ctx: int = 131072, num_predict: int = -1):
         try:
             from ollama import Client
         except ImportError:
@@ -292,7 +309,20 @@ class OllamaBackend(ModelBackend):
             )
         self.model = model
         self.client = Client(host=base_url)
- 
+        # num_predict counts thinking tokens too, so a low cap can leave a
+        # thinking model with empty content. -1 = no limit.
+        self.options = {
+            'num_ctx': num_ctx,
+            'num_predict': num_predict,
+        }
+        # Recorded in each response's meta file, so runs against different
+        # server versions can be told apart.
+        try:
+            import httpx
+            self.server_version = httpx.get(f"{base_url}/api/version", timeout=5).json().get("version")
+        except Exception:
+            self.server_version = None
+
     def prompt(self, system_prompt: str, user_prompt: str, image_base64: str) -> str:
         messages = [
             {
@@ -306,20 +336,23 @@ class OllamaBackend(ModelBackend):
             }
         ]
         
-        chat_kwargs = {
-            "model": self.model,
-            "messages": messages
-        }
-        
-        # if "qwen" in self.model.lower() or 'gemma3' in self.model.lower():
-        chat_kwargs["options"] = {
-            'num_ctx': 32768,  
-            'num_predict': 8192,   
-        }
+        response = self.client.chat(
+            model=self.model,
+            messages=messages,
+            options=self.options
+        )
 
-        response = self.client.chat(**chat_kwargs)
+        content = response['message']['content'].strip()
+        if not content:
+            print(f"[WARNING] Ollama returned empty content "
+                  f"(done_reason={response.done_reason}, eval_count={response.eval_count})")
 
-        return response['message']['content'].strip(), None
+        used = (response.prompt_eval_count or 0) + (response.eval_count or 0)
+        if used >= 0.9 * self.options['num_ctx']:
+            print(f"[WARNING] Ollama context nearly full: {used}/{self.options['num_ctx']} tokens "
+                  f"(prompt_eval_count={response.prompt_eval_count}, eval_count={response.eval_count})")
+
+        return content, response
  
  
 # ===========================================================================
@@ -351,7 +384,16 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
         
         # Ollama with custom base_url (for different GPU/port)
         backend = build_backend("ollama", "qwen3.6", base_url="http://127.0.0.1:11435")
+
+        # Ollama with custom context window / output cap
+        backend = build_backend("ollama", "qwen3.6", num_ctx=65536, num_predict=16384)
     """
+    # Ollama-only options; popped up front so they never leak into the
+    # HuggingFace pipeline kwargs.
+    base_url = pipeline_kwargs.pop("base_url", "http://127.0.0.1:11434")
+    num_ctx = pipeline_kwargs.pop("num_ctx", 131072)
+    num_predict = pipeline_kwargs.pop("num_predict", -1)
+
     if backend_type == "openai":
         from openai import OpenAI
         client = OpenAI()
@@ -361,8 +403,7 @@ def build_backend(backend_type: str, model: str, reasoning_effort: str | None = 
         return HuggingFaceBackend(model, **pipeline_kwargs)
     
     elif backend_type == "ollama":
-        base_url = pipeline_kwargs.pop("base_url", "http://127.0.0.1:11434")
-        return OllamaBackend(model, base_url=base_url)
+        return OllamaBackend(model, base_url=base_url, num_ctx=num_ctx, num_predict=num_predict)
     
     else:
         raise ValueError(f"Unknown backend type: {backend_type!r}. Must be 'openai', 'huggingface', or 'ollama'")

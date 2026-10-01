@@ -19,7 +19,7 @@ from prompts_utils import (load_image, exhibit_selection, prompt_model,
                            discover_complexity_and_layouts, build_paths,
                            extract_scar_validations, extract_validation_fields,
                            build_backend, create_failure_final_results,
-                           save_response_record, atomic_write_json, atomic_write_text, NO_ROUTE_FOUND_EXIT_CODE)
+                           save_response_record, atomic_write_json, save_raw_output, NO_ROUTE_FOUND_EXIT_CODE)
 
 # -------- Force UTF-8 encoding for stdout on Windows --------
 if sys.platform == 'win32':
@@ -78,6 +78,12 @@ def parse_arguments():
     
     parser.add_argument('--base-url', type=str, default='http://127.0.0.1:11434',
                     help='Base URL for Ollama backend (default: http://127.0.0.1:11434)')
+
+    parser.add_argument('--num-ctx', type=int, default=131072,
+                    help='Context window size for Ollama backend (default: 131072)')
+
+    parser.add_argument('--num-predict', type=int, default=-1,
+                    help='Max output tokens (including thinking) for Ollama backend, -1 = no limit (default: -1)')
 
     parser.add_argument('--svr-fields', nargs='+',
                        default=['connectivity', 'wall_crossings', 'exhibit_collision', 'out_of_area_violations'],
@@ -221,7 +227,14 @@ FILENAMES = {
     'annotations': ANNOTATIONS_FILENAME
 }
 
-BACKEND = build_backend(args.backend, args.model, args.reasoning, base_url=args.base_url)
+BACKEND = build_backend(args.backend, args.model, args.reasoning, base_url=args.base_url,
+                        num_ctx=args.num_ctx, num_predict=args.num_predict)
+
+# Extra fields saved with every raw model output's meta file
+RESPONSE_META = {
+    "ollama_server_version": getattr(BACKEND, "server_version", None),
+    "options": getattr(BACKEND, "options", None),
+}
 
 # ========================================
 
@@ -430,7 +443,7 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
 
         try:
             text_output_selection, response = prompt_model(BACKEND, system_prompt_selection, user_prompt_selection, image_base64)
-            atomic_write_text(output_paths['raw_selection_output'], text_output_selection)
+            save_raw_output(output_paths['raw_selection_output'], text_output_selection, response, RESPONSE_META)
             gpt_selected_exhibits = exhibit_selection(text_output_selection, exhibits_list)
             save_response_record(
                 model_name=model_name,
@@ -563,7 +576,7 @@ def process_layout(layout_folder, model_name, difficulty, complexity, pbar=None)
             f.write(user_prompt_route)
 
         text_output_route, response = prompt_model(BACKEND, system_prompt_route, user_prompt_route, image_base64)
-        atomic_write_text(output_paths['raw_route_output'], text_output_route)
+        save_raw_output(output_paths['raw_route_output'], text_output_route, response, RESPONSE_META)
         save_response_record(
             model_name=model_name,
             difficulty=difficulty,

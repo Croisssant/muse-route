@@ -93,6 +93,12 @@ Examples:
     # Ollama configuration
     parser.add_argument('--base-url', type=str, default='http://127.0.0.1:11434',
                        help='Base URL for Ollama backend (default: http://127.0.0.1:11434)')
+
+    parser.add_argument('--num-ctx', type=int, default=131072,
+                       help='Context window size for Ollama backend (default: 131072)')
+
+    parser.add_argument('--num-predict', type=int, default=-1,
+                       help='Max output tokens (including thinking) for Ollama backend, -1 = no limit (default: -1)')
     
     # Timeout configuration
     parser.add_argument('--timeout', type=int, default=None,
@@ -178,6 +184,9 @@ async def run_script(script_name, script_label, backend, model, reasoning, args,
     # Add base_url if provided
     if args.base_url:
         cmd.extend(['--base-url', args.base_url])
+
+    # Add Ollama context window / output cap
+    cmd.extend(['--num-ctx', str(args.num_ctx), '--num-predict', str(args.num_predict)])
     
     # Add timeout if provided
     if args.timeout:
@@ -304,6 +313,9 @@ def run_script_sync(script_name, script_label, backend, model, reasoning, args, 
     # Add base_url if provided
     if args.base_url:
         cmd.extend(['--base-url', args.base_url])
+
+    # Add Ollama context window / output cap
+    cmd.extend(['--num-ctx', str(args.num_ctx), '--num-predict', str(args.num_predict)])
     
     # Add timeout if provided
     if args.timeout:
@@ -389,6 +401,8 @@ def main():
     print(f"  Output Folder: {output_folder}")
     if args.base_url and args.backend == 'ollama':
         print(f"  Ollama Base URL: {args.base_url}")
+    if args.backend == 'ollama':
+        print(f"  Ollama num_ctx: {args.num_ctx}, num_predict: {args.num_predict}")
     if args.timeout:
         print(f"  Timeout: {args.timeout}s per layout")
     print(f"  Complexity Mode: {args.complexity_mode}")

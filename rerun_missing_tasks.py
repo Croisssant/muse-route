@@ -125,7 +125,8 @@ def group_missing_tasks(missing_data, model_filter=None, difficulty_filter=None)
     return grouped
 
 
-def generate_commands(grouped_tasks, backend='openai', timeout=None, base_url=None, results_dir='results'):
+def generate_commands(grouped_tasks, backend='openai', timeout=None, base_url=None, results_dir='results',
+                      num_ctx=None, num_predict=None):
     """
     Generate command list from grouped tasks.
     Returns list of tuples: (description, command_args)
@@ -164,6 +165,12 @@ def generate_commands(grouped_tasks, backend='openai', timeout=None, base_url=No
                 # Add base_url if specified
                 if base_url:
                     cmd.extend(['--base-url', base_url])
+
+                # Add Ollama context window / output cap if specified
+                if num_ctx is not None:
+                    cmd.extend(['--num-ctx', str(num_ctx)])
+                if num_predict is not None:
+                    cmd.extend(['--num-predict', str(num_predict)])
 
                 # Add timeout if specified
                 if timeout is not None:
@@ -282,6 +289,12 @@ Examples:
     
     parser.add_argument('--base-url', type=str, default='http://127.0.0.1:11434',
                        help='Base URL for Ollama backend (default: http://127.0.0.1:11434)')
+
+    parser.add_argument('--num-ctx', type=int, default=131072,
+                       help='Context window size for Ollama backend (default: 131072)')
+
+    parser.add_argument('--num-predict', type=int, default=-1,
+                       help='Max output tokens (including thinking) for Ollama backend, -1 = no limit (default: -1)')
     
     parser.add_argument('--timeout', type=int, default=None,
                        help='Timeout in seconds for each layout processing (default: None, no timeout)')
@@ -344,7 +357,8 @@ Examples:
         return
     
     # Generate commands
-    commands = generate_commands(grouped, args.backend, args.timeout, args.base_url, results_dir)
+    commands = generate_commands(grouped, args.backend, args.timeout, args.base_url, results_dir,
+                                 num_ctx=args.num_ctx, num_predict=args.num_predict)
     
     if not commands:
         print("\n✗ No commands generated!")
